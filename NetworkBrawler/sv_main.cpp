@@ -12,6 +12,7 @@
 #include <Sel/Transform.hpp>
 
 ENetPacket* build_playerlist_packet(GameData& gameData);
+
 void handle_message(Player& player, const std::vector<std::uint8_t>& message, GameData& gameData, NetworkSystem& networkSystem);
 void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, NetworkSystem& networkSystem);
 
@@ -198,6 +199,8 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 		}
 	}
 }
+
+
 
 void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, NetworkSystem& networkSystem)
 {

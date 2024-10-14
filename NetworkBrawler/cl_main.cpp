@@ -37,6 +37,10 @@ struct GameData
 	std::size_t ownPlayerIndex; //< Notre propre ID
 };
 
+void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData);
+bool run_network(ENetHost* host, GameData& gameData);
+
+
 int main()
 {
 	GameData gameData;
@@ -153,8 +157,69 @@ int main()
 
 			Sel::InputManager::Instance().HandleEvent(event);
 		}
+
+		// On gère la couche réseau
+		if (!run_network(host, gameData))
+		{
+			isOpen = false;
+			break;
+		}
 	}
 
+	// On prévient le serveur qu'on s'est déconnecté
+	enet_peer_disconnect_now(gameData.serverPeer, 0);
+	enet_host_flush(host);
+	enet_host_destroy(host);
+
+	enet_deinitialize();
 
 	return EXIT_SUCCESS;
+}
+
+void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData)
+{
+	// On décode l'opcode pour savoir à quel type de message on a affaire
+	std::size_t offset = 0;
+	Opcode opcode = static_cast<Opcode>(Deserialize_u8(message, offset));
+	switch (opcode)
+	{
+
+	}
+}
+
+bool run_network(ENetHost* host, GameData& gameData)
+{
+	ENetEvent event;
+	// On fait tourner le réseau via enet_host_service
+	if (enet_host_service(host, &event, 0) > 0)
+	{
+		// On dépile tous les événements
+		// enet_host_check_events permet de récupérer les événements sans faire tourner la couche réseau d'ENet (la meilleure approche est donc d'appeler enet_host_service une fois puis enet_host_check_events tant que celle-ci renvoie une valeur supérieure à zéro)
+
+		do
+		{
+			switch (event.type)
+			{
+			case ENET_EVENT_TYPE_DISCONNECT:
+				std::cout << "Disconnected from server" << std::endl;
+				return false;
+
+			case ENET_EVENT_TYPE_RECEIVE:
+			{
+				// On a reçu un message ! Traitons-le
+				std::vector<std::uint8_t> content(event.packet->dataLength); //< On copie son contenu dans un std::vector pour plus de facilité de gestion
+				std::memcpy(content.data(), event.packet->data, event.packet->dataLength);
+
+				// On gère le message qu'on a reçu
+				handle_message(content, gameData);
+
+				// On n'oublie pas de libérer le packet
+				enet_packet_destroy(event.packet);
+				break;
+			}
+			}
+		} while (enet_host_check_events(host, &event) > 0);
+	}
+
+	return true;
 }

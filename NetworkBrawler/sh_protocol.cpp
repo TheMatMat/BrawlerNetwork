@@ -13,11 +13,16 @@ BrawlerData BrawlerData::Deserialize(const std::vector<std::uint8_t>& byteArray,
 
 void PlayerNamePacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 {
+	Serialize_str(byteArray, name);
 }
 
 PlayerNamePacket PlayerNamePacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
 {
-	return PlayerNamePacket();
+	PlayerNamePacket packet;
+
+	packet.name = Deserialize_str(byteArray, offset);
+
+	return packet;
 }
 
 void CreateBrawlerPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
