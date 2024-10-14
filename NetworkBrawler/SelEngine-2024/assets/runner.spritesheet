@@ -1,0 +1,43 @@
+{
+	"Animations": [
+		{
+			"frameCount": 5,
+			"frameDuration": 0.15,
+			"name": "idle",
+			"size": {
+				"x": 32,
+				"y": 32
+			},
+			"start": {
+				"x": 0,
+				"y": 0
+			}
+		},
+		{
+			"frameCount": 8,
+			"frameDuration": 0.10000000149011612,
+			"name": "running",
+			"size": {
+				"x": 32,
+				"y": 32
+			},
+			"start": {
+				"x": 0,
+				"y": 32
+			}
+		},
+		{
+			"frameCount": 4,
+			"frameDuration": 0.10000000149011612,
+			"name": "jump",
+			"size": {
+				"x": 32,
+				"y": 32
+			},
+			"start": {
+				"x": 0,
+				"y": 64
+			}
+		}
+	]
+}
