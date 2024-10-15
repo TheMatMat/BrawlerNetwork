@@ -98,6 +98,21 @@ int main()
 					// On enlève son peer (pour rendre son slot disponible)
 					player.peer = nullptr;
 
+					// On delete son brawler
+					player.brawler.reset();
+					if (player.ownBrawlerNetworkId)
+					{
+						auto it = gameData.networkToEntity.find(*(player.ownBrawlerNetworkId));
+						if (it != gameData.networkToEntity.end())
+						{
+							entt::handle entityHandle = it->second;
+							gameData.registry.destroy(entityHandle);
+
+							gameData.networkToEntity.erase(it);
+
+						}
+					}
+
 					// On renvoie la liste des joueurs à tous les joueurs (si ce joueur avait un nom)
 					if (!player.name.empty())
 					{
@@ -215,16 +230,17 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 			// On l'ajoute à la liste d'entité
 			gameData.networkToEntity[network->networkId] = brawler.GetHandle();
 
-			// On revois au createur l'id réseaux de son brawler
+			// On renvois au createur l'id réseaux de son brawler
 			UpdateSelfBrawlerId updateSelfBrawlerIdPacket;
 			updateSelfBrawlerIdPacket.id = network->networkId;
 
 			enet_peer_send(player.peer, 0, build_packet(updateSelfBrawlerIdPacket, ENET_PACKET_FLAG_RELIABLE));
 
-
+			player.ownBrawlerNetworkId = network->networkId;
 			player.brawler = std::move(brawler);
-		}
 
+			break;
+		}
 		case Opcode::C_PlayerInputs:
 		{
 			PlayerInputsPacket packet = PlayerInputsPacket::Deserialize(message, offset);

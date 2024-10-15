@@ -16,6 +16,7 @@ struct Player
 	std::size_t index; //< La position du joueur dans le tableau (sert d'id numérique lors de l'affichage)
 	std::string name; //< Nom du joueur
 	std::optional<Brawler> brawler;
+	std::optional<std::uint32_t> ownBrawlerNetworkId;
 };
 
 struct GameData

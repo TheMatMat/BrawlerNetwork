@@ -89,11 +89,16 @@ BrawlerStatesPacket BrawlerStatesPacket::Deserialize(const std::vector<std::uint
 
 void DeleteBrawlerPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 {
+	Serialize_u32(byteArray, brawlerId);
 }
 
 DeleteBrawlerPacket DeleteBrawlerPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
 {
-	return DeleteBrawlerPacket();
+	DeleteBrawlerPacket packet;
+
+	packet.brawlerId = Deserialize_u32(byteArray, offset);
+
+	return packet;
 }
 
 

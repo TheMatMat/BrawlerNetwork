@@ -57,7 +57,7 @@ struct GameData
 	std::unordered_map<std::uint32_t /*networkId*/, entt::handle> networkToEntities; //< toutes les entités (ici tous les brawlers)
 	PlayerInputs inputs; //< Les inputs du joueur
 	std::size_t ownPlayerIndex; //< Notre propre ID
-	std::uint32_t ownBrawlerNetworkIndex; //< l'ID reseau de notre brawler
+	std::optional<std::uint32_t> ownBrawlerNetworkIndex; //< l'ID reseau de notre brawler
 };
 
 void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData);
@@ -354,7 +354,19 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 
 		case Opcode::S_DeleteBrawler:
 		{
-		
+			DeleteBrawlerPacket packet = DeleteBrawlerPacket::Deserialize(message, offset);
+
+			auto it = gameData.networkToEntities.find(packet.brawlerId);
+			if (it == gameData.networkToEntities.end())
+				break;
+
+			gameData.registry->destroy(it->second);
+
+			gameData.networkToEntities.erase(it);
+
+			if (gameData.ownBrawlerNetworkIndex && packet.brawlerId == gameData.ownBrawlerNetworkIndex)
+				gameData.ownBrawlerNetworkIndex.reset();
+			
 			break;
 		}
 
@@ -431,7 +443,7 @@ bool run_network(ENetHost* host, GameData& gameData)
 void tick(GameData& gameData)
 {
 	PlayerInputsPacket playerInputs;
-	playerInputs.brawlerId = gameData.ownBrawlerNetworkIndex;
+	playerInputs.brawlerId = *(gameData.ownBrawlerNetworkIndex);
 	playerInputs.inputs = gameData.inputs;
 
 	enet_peer_send(gameData.serverPeer, 0, build_packet(playerInputs, 0));
