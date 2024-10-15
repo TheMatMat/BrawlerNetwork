@@ -38,6 +38,15 @@ struct BrawlerData
 	static BrawlerData Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
+// Un joueur souhaite créer un Brawler
+struct CreateBrawlerResquest
+{
+	static constexpr Opcode opcode = Opcode::C_CreateBrawlerRequest;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static CreateBrawlerResquest Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
 // Un joueur souhaite renseigner son nom
 struct PlayerNamePacket
 {
@@ -54,7 +63,10 @@ struct CreateBrawlerPacket
 {
 	static constexpr Opcode opcode = Opcode::S_CreateBrawler;
 
-	BrawlerData brawlerData;
+	/*BrawlerData brawlerData;*/
+	std::uint32_t brawlerId;
+	Sel::Vector2f position;
+	Sel::Vector2f linearVelocity;
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static CreateBrawlerPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);

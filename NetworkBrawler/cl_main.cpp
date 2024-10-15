@@ -9,22 +9,44 @@
 #include <vector>
 #include <unordered_map>
 #include <Sel/Color.hpp>
-#include <Sel/Core.hpp>
-#include <Sel/Renderer.hpp>
-#include <Sel/InputManager.hpp>
-#include <Sel/ResourceManager.hpp>
-#include <Sel/Window.hpp>
+#include <Sel/AnimationSystem.hpp>
+#include <Sel/CameraComponent.hpp>
+#include <Sel/ComponentRegistry.hpp>
 #include <Sel/Stopwatch.hpp>
-#include "cl_brawler.h"
+#include <Sel/GraphicsComponent.hpp>
+#include <Sel/InputManager.hpp>
+#include <Sel/Model.hpp>
+#include <Sel/PhysicsSystem.hpp>
+#include <Sel/RenderSystem.hpp>
+#include <Sel/ResourceManager.hpp>
+#include <Sel/RigidBodyComponent.hpp>
+#include <Sel/Core.hpp>
+#include <Sel/ImGuiRenderer.hpp>
+#include <Sel/Renderer.hpp>
+#include <Sel/Texture.hpp>
+#include <Sel/Window.hpp>
+#include <Sel/Sprite.hpp>
+#include <Sel/SpritesheetComponent.hpp>
+#include <Sel/Transform.hpp>
+#include <Sel/VelocityComponent.hpp>
+#include <Sel/VelocitySystem.hpp>
+#include <Sel/WorldEditor.hpp>
+#include <imgui.h>
 #include "sh_inputs.h"
-#include <Sel/ChipmunkSpace.hpp>
+#include "sh_brawler.h"
+#include "cl_brawler.h"
 
 struct PlayerData
 {
 	std::string name;
 	Sel::Color color;
-	std::optional<ClientBrawler> brawler;
+	std::optional<BrawlerClient> brawler;
 	std::optional<std::uint8_t> deathPositionIndex;
+};
+
+struct ClientNetworkId
+{
+	std::uint32_t networkId;
 };
 
 struct GameData
@@ -39,7 +61,9 @@ struct GameData
 
 void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData);
 bool run_network(ENetHost* host, GameData& gameData);
+void tick(GameData& gameData);
 
+entt::handle CreateCamera(entt::registry& registry);
 
 int main()
 {
@@ -127,13 +151,7 @@ int main()
 		break;
 	}
 
-	// On envoie notre nom au serveur
-	{
-		PlayerNamePacket namePacket;
-		namePacket.name = name;
 
-		enet_peer_send(gameData.serverPeer, 0, build_packet(namePacket, ENET_PACKET_FLAG_RELIABLE));
-	}
 
 	Sel::Core core;
 
@@ -142,6 +160,96 @@ int main()
 
 	Sel::ResourceManager resourceManager(renderer);
 	Sel::InputManager inputManager;
+
+	Sel::ImGuiRenderer imgui(window, renderer);
+	ImGui::SetCurrentContext(imgui.GetContext());
+
+	entt::registry registry;
+	Sel::RenderSystem renderSystem(renderer, registry);
+	Sel::PhysicsSystem physicsSystem(registry);
+	physicsSystem.SetGravity({ 0.f, 0.f });
+	physicsSystem.SetDamping(0.9f);
+
+	Sel::VelocitySystem velocitySystem(registry);
+
+	gameData.registry = &registry;
+
+	Sel::ComponentRegistry componentRegistry;
+
+	inputManager.BindKeyPressed(SDL_KeyCode::SDLK_F1, "OpenEditor");
+
+	std::optional<Sel::WorldEditor> worldEditor;
+	inputManager.BindAction("OpenEditor", [&](bool active)
+		{
+			if (!active)
+				return;
+
+			if (worldEditor)
+				worldEditor.reset();
+			else
+				worldEditor.emplace(window, registry, componentRegistry);
+		});
+
+	// On envoie notre nom au serveur
+	{
+		PlayerNamePacket namePacket;
+		namePacket.name = name;
+
+		enet_peer_send(gameData.serverPeer, 0, build_packet(namePacket, ENET_PACKET_FLAG_RELIABLE));
+	}
+
+	//Inputs
+	#pragma region Inputs
+		Sel::InputManager::Instance().BindKeyPressed(SDLK_q, "MoveLeft");
+		Sel::InputManager::Instance().BindAction("MoveLeft", [&](bool pressed)
+		{
+			if (!pressed)
+				gameData.inputs.moveLeft = false;
+			else
+				gameData.inputs.moveLeft = true;
+
+			//std::cout << "move Left : " << (int)(gameData.inputs.moveLeft) << std::endl;
+		});
+
+		Sel::InputManager::Instance().BindKeyPressed(SDLK_d, "MoveRight");
+		Sel::InputManager::Instance().BindAction("MoveRight", [&](bool pressed)
+		{
+			if (!pressed)
+				gameData.inputs.moveRight = false;
+			else
+				gameData.inputs.moveRight = true;
+
+			//std::cout << "move Left : " << (int)(gameData.inputs.moveRight) << std::endl;
+		});
+
+		Sel::InputManager::Instance().BindKeyPressed(SDLK_z, "MoveUp");
+		Sel::InputManager::Instance().BindAction("MoveUp", [&](bool pressed)
+		{
+			if (!pressed)
+				gameData.inputs.moveUp = false;
+			else
+				gameData.inputs.moveUp = true;
+
+			//std::cout << "move Left : " << (int)(gameData.inputs.moveUp) << std::endl;
+		});
+
+		Sel::InputManager::Instance().BindKeyPressed(SDLK_s, "MoveDown");
+		Sel::InputManager::Instance().BindAction("MoveDown", [&](bool pressed)
+		{
+			if (!pressed)
+				gameData.inputs.moveDown = false;
+			else
+				gameData.inputs.moveDown = true;
+
+			//std::cout << "move Left : " << (int)(gameData.inputs.moveDown) << std::endl;
+		});
+	#pragma endregion
+
+	entt::handle cameraEntity = CreateCamera(registry);
+
+	// Le client souhaite construire son brawler
+	CreateBrawlerResquest packet;
+	enet_peer_send(gameData.serverPeer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
 
 	Sel::Stopwatch clock;
 	bool isOpen = true;
@@ -155,6 +263,8 @@ int main()
 			if (event.type == SDL_QUIT)
 				isOpen = false;
 
+			imgui.ProcessEvent(event);
+
 			Sel::InputManager::Instance().HandleEvent(event);
 		}
 
@@ -164,6 +274,39 @@ int main()
 			isOpen = false;
 			break;
 		}
+
+		imgui.NewFrame();
+
+		renderer.SetDrawColor(127, 0, 127, 255);
+		renderer.Clear();
+
+		/*brawler.ApplyInputs(gameData.inputs);*/
+
+		//physicsSystem.Update(deltaTime);
+		//velocitySystem.Update(deltaTime);
+		renderSystem.Update(deltaTime);
+
+		if (ImGui::Begin("Menu"))
+		{
+			ImGui::LabelText("FPS", "%f", 1.f / deltaTime);
+
+			ImGui::Text("Nombre d'entités: %zu", registry.storage<entt::entity>().in_use());
+
+			/*if (ImGui::CollapsingHeader("Connectés"))
+			{
+				for (const auto& playerData : gameData.players)
+					ImGui::TextColored({ playerData.color.r, playerData.color.g, playerData.color.b, playerData.color.a }, "%s", playerData.name.c_str());
+			}*/
+		}
+		ImGui::End();
+
+		if (worldEditor)
+			worldEditor->Render();
+
+		imgui.Render(renderer);
+
+		renderer.Present();
+
 	}
 
 	// On prévient le serveur qu'on s'est déconnecté
@@ -176,6 +319,15 @@ int main()
 	return EXIT_SUCCESS;
 }
 
+entt::handle CreateCamera(entt::registry& registry)
+{
+	entt::entity entity = registry.create();
+	registry.emplace<Sel::CameraComponent>(entity);
+	registry.emplace<Sel::Transform>(entity);
+
+	return entt::handle(registry, entity);
+}
+
 void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData)
 {
 	// On décode l'opcode pour savoir à quel type de message on a affaire
@@ -183,7 +335,47 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 	Opcode opcode = static_cast<Opcode>(Deserialize_u8(message, offset));
 	switch (opcode)
 	{
+		case Opcode::S_CreateBrawler:
+		{
+			CreateBrawlerPacket packet = CreateBrawlerPacket::Deserialize(message, offset);
+			Sel::Vector2f position = packet.position;
+			Sel::Vector2f linearVelocity = packet.linearVelocity;
 
+			BrawlerClient brawler(*(gameData.registry), position, 0.f, 1.f, linearVelocity);
+
+			gameData.networkToEntities[packet.brawlerId] = brawler.GetHandle();
+
+			std::cout << "new Brawler" << std::endl;
+
+			break;
+		}
+
+		case Opcode::S_DeleteBrawler:
+		{
+		
+			break;
+		}
+
+		case Opcode::S_BrawlerStates:
+		{
+			BrawlerStatesPacket packet = BrawlerStatesPacket::Deserialize(message, offset);
+
+			for (const auto& state : packet.brawlers)
+			{
+				auto it = gameData.networkToEntities.find(state.brawlerId);
+				if (it == gameData.networkToEntities.end())
+					continue;
+
+				entt::handle brawlerEntity = it->second;
+
+				auto& transform = brawlerEntity.get<Sel::Transform>();
+				transform.SetPosition(state.position);
+
+				auto& velocity = brawlerEntity.get<Sel::VelocityComponent>();
+				velocity.linearVel = state.linearVelocity;
+			}
+			break;
+		}
 	}
 }
 
@@ -222,4 +414,9 @@ bool run_network(ENetHost* host, GameData& gameData)
 	}
 
 	return true;
+}
+
+
+void tick(GameData& gameData)
+{
 }

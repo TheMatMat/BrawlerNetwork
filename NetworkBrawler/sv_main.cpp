@@ -10,11 +10,14 @@
 #include <iostream>
 #include <cassert>
 #include <Sel/Transform.hpp>
+#include "sh_brawler.h"
+#include <Sel/VelocitySystem.hpp>
+#include "sv_networkedcomponent.h"
 
 ENetPacket* build_playerlist_packet(GameData& gameData);
 
 void handle_message(Player& player, const std::vector<std::uint8_t>& message, GameData& gameData, NetworkSystem& networkSystem);
-void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, NetworkSystem& networkSystem);
+void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, Sel::VelocitySystem& velocitySystem, NetworkSystem& networkSystem);
 
 int main()
 {
@@ -40,6 +43,7 @@ int main()
 	GameData gameData(registry);
 
 	Sel::PhysicsSystem physicsSystem(registry);
+	Sel::VelocitySystem velocitySystem(registry);
 	NetworkSystem networkSystem(registry, gameData);
 	physicsSystem.SetGravity({ 0.f, 0.f });
 	physicsSystem.SetDamping(0.9f);
@@ -136,7 +140,7 @@ int main()
 			//worldLimit.Update();
 
 			// On met à jour la logique du jeu
-			//tick(gameData, physicsSystem, networkSystem);
+			tick(gameData, physicsSystem, velocitySystem, networkSystem);
 
 			// On prévoit la prochaine mise à jour
 			gameData.nextTick += gameData.tickInterval;
@@ -197,15 +201,31 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 
 			break;
 		}
+		case Opcode::C_CreateBrawlerRequest:
+		{
+			std::cout << "Player " << player.name << " wants to spawn its brawler";
+
+			Brawler brawler(gameData.registry, Sel::Vector2f(100.f, 20.f), 0.f, 1.f, Sel::Vector2f(10.f, 0.f));
+			auto network = brawler.GetHandle().try_get<NetworkedComponent>();
+
+			if (network)
+				gameData.networkToEntity[network->networkId] = brawler.GetHandle();
+		}
 	}
 }
 
 
 
-void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, NetworkSystem& networkSystem)
+void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, Sel::VelocitySystem& velocitySystem, NetworkSystem& networkSystem)
 {
 	// On fait avancer le monde
-	physicsSystem.Update(TickDelay);
+	//physicsSystem.Update(TickDelay);
+	velocitySystem.Update(TickDelay);
 	networkSystem.Update();
 
+	//for (const Player& player : gameData.players)
+	//{
+	//	if (player.peer != nullptr && !player.name.empty()) //< Est-ce que le slot est occupé par un joueur (et est-ce que ce joueur a bien envoyé son nom) ?
+	//		enet_peer_send(player.peer, 0, BrawlersPositionPacket);
+	//}
 }

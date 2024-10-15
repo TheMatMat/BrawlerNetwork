@@ -5,9 +5,10 @@
 #include <Sel/RigidBodyComponent.hpp>
 #include <Sel/Transform.hpp>
 #include <entt/entt.hpp>
+#include <Sel/VelocityComponent.hpp>
 
 NetworkSystem::NetworkSystem(entt::registry& registry, GameData& gameData) :
-	m_networkObserver(registry, entt::collector.group<Sel::Transform, NetworkedComponent, Sel::RigidBodyComponent>()),
+	m_networkObserver(registry, entt::collector.group<Sel::Transform, NetworkedComponent, Sel::VelocityComponent>()),
 	m_registry(registry),
 	m_gameData(gameData),
 	m_nextShapeId(0)
@@ -18,18 +19,20 @@ NetworkSystem::NetworkSystem(entt::registry& registry, GameData& gameData) :
 
 void NetworkSystem::CreateAllEntities(ENetPeer* peer)
 {
-	auto view = m_registry.view<NetworkedComponent, Sel::Transform, Sel::RigidBodyComponent, BrawlerData>();
+	auto view = m_registry.view<NetworkedComponent, Sel::Transform, Sel::VelocityComponent>();
 	for (entt::entity entity : view)
 	{
 		auto& transform = view.get<Sel::Transform>(entity);
 		auto& networked = view.get<NetworkedComponent>(entity);
-		auto& shapeData = view.get<BrawlerData>(entity);
+		auto& velocity = view.get<Sel::VelocityComponent>(entity);
 
 		CreateBrawlerPacket createBrawler;
-		createBrawler.brawlerData.position = transform.GetPosition();
+		createBrawler.brawlerId = networked.networkId;
+		createBrawler.position = transform.GetPosition();
+		createBrawler.linearVelocity = velocity.linearVel;
 
-		ENetPacket* createShapePacket = build_packet(createBrawler, ENET_PACKET_FLAG_RELIABLE);
-		enet_peer_send(peer, 0, createShapePacket);
+		ENetPacket* createBrawlerPacket = build_packet(createBrawler, ENET_PACKET_FLAG_RELIABLE);
+		enet_peer_send(peer, 0, createBrawlerPacket);
 	}
 }
 
@@ -39,28 +42,30 @@ void NetworkSystem::Update()
 		{
 			auto& transform = m_registry.get<Sel::Transform>(entity);
 			auto& networked = m_registry.get<NetworkedComponent>(entity);
-			auto& brawlerData = m_registry.get<BrawlerData>(entity);
+			auto& velocity = m_registry.get<Sel::VelocityComponent>(entity);
 
 			CreateBrawlerPacket createBrawler;
-			createBrawler.brawlerData.position = transform.GetPosition();
+			createBrawler.brawlerId = networked.networkId;
+			createBrawler.position = transform.GetPosition();
+			createBrawler.linearVelocity = velocity.linearVel;
 
-			ENetPacket* createShapePacket = build_packet(createBrawler, ENET_PACKET_FLAG_RELIABLE);
+			ENetPacket* createBrawlerPacket = build_packet(createBrawler, ENET_PACKET_FLAG_RELIABLE);
 
 			for (const Player& player : m_gameData.players)
 			{
 				if (player.peer != nullptr && !player.name.empty()) //< Est-ce que le slot est occupé par un joueur (et est-ce que ce joueur a bien envoyé son nom) ?
-					enet_peer_send(player.peer, 0, createShapePacket);
+					enet_peer_send(player.peer, 0, createBrawlerPacket);
 			}
 		});
 
-	auto view = m_registry.view<NetworkedComponent, Sel::Transform, Sel::RigidBodyComponent>();
+	auto view = m_registry.view<NetworkedComponent, Sel::Transform, Sel::VelocityComponent>();
 	BrawlerStatesPacket brawlerStates;
-	for (auto [entity, network, transform, rigidBody] : view.each())
+	for (auto [entity, network, transform, velocity] : view.each())
 	{
 		auto& brawlerData = brawlerStates.brawlers.emplace_back();
 		brawlerData.brawlerId = network.networkId;
 		brawlerData.position = transform.GetPosition();
-		brawlerData.linearVelocity = rigidBody.GetLinearVelocity();
+		brawlerData.linearVelocity = velocity.linearVel;
 	}
 
 	ENetPacket* brawlerStatesPacket = build_packet(brawlerStates, 0);

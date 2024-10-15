@@ -27,20 +27,64 @@ PlayerNamePacket PlayerNamePacket::Deserialize(const std::vector<std::uint8_t>& 
 
 void CreateBrawlerPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 {
+	Serialize_u32(byteArray, brawlerId);
+	Serialize_f32(byteArray, position.x);
+	Serialize_f32(byteArray, position.y);
+	Serialize_f32(byteArray, linearVelocity.x);
+	Serialize_f32(byteArray, linearVelocity.y);
 }
 
 CreateBrawlerPacket CreateBrawlerPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
 {
-	return CreateBrawlerPacket();
+	CreateBrawlerPacket packet;
+
+	packet.brawlerId = Deserialize_u32(byteArray, offset);
+	float posX = Deserialize_f32(byteArray, offset);
+	float posY = Deserialize_f32(byteArray, offset);
+	packet.position = Sel::Vector2(posX, posY);
+
+	float velX = Deserialize_f32(byteArray, offset);
+	float velY = Deserialize_f32(byteArray, offset);
+	packet.linearVelocity = Sel::Vector2f(velX, velY);
+
+	return packet;
 }
 
 void BrawlerStatesPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 {
+	Serialize_u32(byteArray, brawlers.size());
+	for (const States& state : brawlers)
+	{
+		Serialize_u32(byteArray, state.brawlerId);
+
+		Serialize_f32(byteArray, state.position.x);
+		Serialize_f32(byteArray, state.position.y);
+
+		Serialize_f32(byteArray, state.linearVelocity.x);
+		Serialize_f32(byteArray, state.linearVelocity.y);
+	}
 }
 
 BrawlerStatesPacket BrawlerStatesPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
 {
-	return BrawlerStatesPacket();
+	BrawlerStatesPacket packet;
+
+	packet.brawlers.resize(Deserialize_u32(byteArray, offset));
+
+	for (auto& state : packet.brawlers)
+	{
+		state.brawlerId = Deserialize_u32(byteArray, offset);
+
+		float posX = Deserialize_f32(byteArray, offset);
+		float posY = Deserialize_f32(byteArray, offset);
+		state.position = Sel::Vector2(posX, posY);
+
+		float velX = Deserialize_f32(byteArray, offset);
+		float velY = Deserialize_f32(byteArray, offset);
+		state.linearVelocity = Sel::Vector2f(velX, velY);
+	}
+
+	return packet;
 }
 
 void DeleteBrawlerPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
@@ -256,4 +300,13 @@ void PlayerListPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 PlayerListPacket PlayerListPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
 {
 	return PlayerListPacket();
+}
+
+void CreateBrawlerResquest::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+}
+
+CreateBrawlerResquest CreateBrawlerResquest::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	return CreateBrawlerResquest();
 }
