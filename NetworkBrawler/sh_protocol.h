@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include "sh_inputs.h"
 
 // Ce fichier contient tout ce qui va être lié au protocole du jeu, à la façon dont le client et le serveur vont communiquer
 
@@ -22,9 +23,11 @@ enum class Opcode : std::uint8_t
 	S_ShapeStates,
 
 	C_CreateBrawlerRequest,
+	C_PlayerInputs,
 	S_CreateBrawler,
 	S_BrawlerStates,
-	S_DeleteBrawler
+	S_DeleteBrawler,
+	S_UpdateSelfBrawlerId,
 };
 
 // Comme plusieurs paquets vont s'envoyer des informations de shapes, on peut les réunir
@@ -72,6 +75,19 @@ struct CreateBrawlerPacket
 	static CreateBrawlerPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
+
+// Un joueur envois ses inputs au serveur
+struct PlayerInputsPacket
+{
+	static constexpr Opcode opcode = Opcode::C_PlayerInputs;
+
+	std::uint32_t brawlerId;
+	PlayerInputs inputs;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static PlayerInputsPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
 // Le serveur envoie à un client la liste de tous les joueurs connectés
 struct PlayerListPacket
 {
@@ -87,6 +103,17 @@ struct PlayerListPacket
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static PlayerListPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
+// Le serveur notifie le player du networkId de son propre brawler
+struct UpdateSelfBrawlerId
+{
+	static constexpr Opcode opcode = Opcode::S_UpdateSelfBrawlerId;
+
+	std::uint32_t id;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static UpdateSelfBrawlerId Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
 // Le serveur envoie les données sur tous les brawlers

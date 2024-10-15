@@ -203,13 +203,38 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 		}
 		case Opcode::C_CreateBrawlerRequest:
 		{
-			std::cout << "Player " << player.name << " wants to spawn its brawler";
+			std::cout << "Player " << player.name << " wants to spawn its brawler" << std::endl;
 
+			// On cree le brawler coté serveur
 			Brawler brawler(gameData.registry, Sel::Vector2f(100.f, 20.f), 0.f, 1.f, Sel::Vector2f(10.f, 0.f));
 			auto network = brawler.GetHandle().try_get<NetworkedComponent>();
 
-			if (network)
-				gameData.networkToEntity[network->networkId] = brawler.GetHandle();
+			if (!network)
+				break;
+
+			// On l'ajoute à la liste d'entité
+			gameData.networkToEntity[network->networkId] = brawler.GetHandle();
+
+			// On revois au createur l'id réseaux de son brawler
+			UpdateSelfBrawlerId updateSelfBrawlerIdPacket;
+			updateSelfBrawlerIdPacket.id = network->networkId;
+
+			enet_peer_send(player.peer, 0, build_packet(updateSelfBrawlerIdPacket, ENET_PACKET_FLAG_RELIABLE));
+
+
+			player.brawler = std::move(brawler);
+		}
+
+		case Opcode::C_PlayerInputs:
+		{
+			PlayerInputsPacket packet = PlayerInputsPacket::Deserialize(message, offset);
+
+			if (!player.brawler)
+				break;
+
+			player.brawler->ApplyInputs(packet.inputs);
+
+			break;
 		}
 	}
 }
@@ -222,10 +247,4 @@ void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, Sel::VelocitySy
 	//physicsSystem.Update(TickDelay);
 	velocitySystem.Update(TickDelay);
 	networkSystem.Update();
-
-	//for (const Player& player : gameData.players)
-	//{
-	//	if (player.peer != nullptr && !player.name.empty()) //< Est-ce que le slot est occupé par un joueur (et est-ce que ce joueur a bien envoyé son nom) ?
-	//		enet_peer_send(player.peer, 0, BrawlersPositionPacket);
-	//}
 }

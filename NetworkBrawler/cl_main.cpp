@@ -54,9 +54,10 @@ struct GameData
 	std::vector<PlayerData> players;
 	ENetPeer* serverPeer; //< Le serveur
 	entt::registry* registry;
-	std::unordered_map<std::uint32_t /*networkId*/, entt::handle> networkToEntities; //< tout le monde
+	std::unordered_map<std::uint32_t /*networkId*/, entt::handle> networkToEntities; //< toutes les entités (ici tous les brawlers)
 	PlayerInputs inputs; //< Les inputs du joueur
 	std::size_t ownPlayerIndex; //< Notre propre ID
+	std::uint32_t ownBrawlerNetworkIndex; //< l'ID reseau de notre brawler
 };
 
 void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData);
@@ -307,6 +308,7 @@ int main()
 
 		renderer.Present();
 
+		tick(gameData);
 	}
 
 	// On prévient le serveur qu'on s'est déconnecté
@@ -376,6 +378,15 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			}
 			break;
 		}
+
+		case Opcode::S_UpdateSelfBrawlerId:
+		{
+			UpdateSelfBrawlerId packet = UpdateSelfBrawlerId::Deserialize(message, offset);
+			
+			gameData.ownBrawlerNetworkIndex = packet.id;
+
+			break;
+		}
 	}
 }
 
@@ -419,4 +430,9 @@ bool run_network(ENetHost* host, GameData& gameData)
 
 void tick(GameData& gameData)
 {
+	PlayerInputsPacket playerInputs;
+	playerInputs.brawlerId = gameData.ownBrawlerNetworkIndex;
+	playerInputs.inputs = gameData.inputs;
+
+	enet_peer_send(gameData.serverPeer, 0, build_packet(playerInputs, 0));
 }

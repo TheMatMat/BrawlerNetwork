@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <vector>
 #include <entt/entity/handle.hpp>
+#include "sh_brawler.h"
 
 struct Player
 {
@@ -14,6 +15,7 @@ struct Player
 	ENetPeer* peer = nullptr; //< Si peer est à nullptr alors le slot est libre
 	std::size_t index; //< La position du joueur dans le tableau (sert d'id numérique lors de l'affichage)
 	std::string name; //< Nom du joueur
+	std::optional<Brawler> brawler;
 };
 
 struct GameData

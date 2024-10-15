@@ -310,3 +310,39 @@ CreateBrawlerResquest CreateBrawlerResquest::Deserialize(const std::vector<std::
 {
 	return CreateBrawlerResquest();
 }
+
+void UpdateSelfBrawlerId::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u32(byteArray, id);
+}
+
+UpdateSelfBrawlerId UpdateSelfBrawlerId::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	UpdateSelfBrawlerId packet;
+
+	packet.id = Deserialize_u32(byteArray, offset);
+
+	return packet;
+}
+
+void PlayerInputsPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u32(byteArray, brawlerId);
+	Serialize_u8(byteArray, inputs.moveLeft);
+	Serialize_u8(byteArray, inputs.moveRight);
+	Serialize_u8(byteArray, inputs.moveUp);
+	Serialize_u8(byteArray, inputs.moveDown);
+}
+
+PlayerInputsPacket PlayerInputsPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	PlayerInputsPacket packet;
+	packet.brawlerId = Deserialize_u32(byteArray, offset);
+
+	packet.inputs.moveLeft = Deserialize_u8(byteArray, offset);
+	packet.inputs.moveRight = Deserialize_u8(byteArray, offset);
+	packet.inputs.moveUp = Deserialize_u8(byteArray, offset);
+	packet.inputs.moveDown = Deserialize_u8(byteArray, offset);
+
+	return packet;
+}
