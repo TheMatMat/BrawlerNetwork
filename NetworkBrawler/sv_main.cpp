@@ -19,6 +19,7 @@ ENetPacket* build_playerlist_packet(GameData& gameData);
 
 void handle_message(Player& player, const std::vector<std::uint8_t>& message, GameData& gameData, NetworkSystem& networkSystem);
 void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, Sel::VelocitySystem& velocitySystem, NetworkSystem& networkSystem);
+entt::handle spawn_collectible(GameData& gameData);
 
 int main()
 {
@@ -52,6 +53,7 @@ int main()
 	for (;;)
 	{
 		float now = gameData.clock.GetElapsedTime();
+		float nowCollectible = gameData.collectibleClock.GetElapsedTime();
 
 		ENetEvent event;
 		if (enet_host_service(host, &event, 1) > 0) //< On met une milliseconde d'attente pour éviter que notre serveur ne bouffe tout le processeur
@@ -157,6 +159,21 @@ int main()
 
 			// On met à jour la logique du jeu
 			tick(gameData, physicsSystem, velocitySystem, networkSystem);
+
+			// Spawn un collectible si le temps d'attente est atteint et que l'on a pas atteint le nombre max de collectible
+			std::size_t brawlerCount = gameData.registry.view<BrawlerFlag>().size();
+			std::size_t collectibleCount = gameData.registry.view<CollectibleFlag>().size();
+
+			// On check s'il y a au moins un brawler et si le nombre de collectibles est inferieur au maximum autorise
+			if (brawlerCount > 0 && collectibleCount < gameData.collectibleMaxCount)
+			{
+				if (now >= gameData.nextCollectibleSpawn)
+				{
+					spawn_collectible(gameData);
+					std::cout << "Spawn Collectible now - " << collectibleCount + 1 << std::endl;
+					gameData.nextCollectibleSpawn = now + gameData.collectibleSpawnInterval;  // Prochain spawn X seconds apres mtnt
+				}
+			}
 
 			// On prévoit la prochaine mise à jour
 			gameData.nextTick += gameData.tickInterval;
@@ -270,4 +287,36 @@ void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, Sel::VelocitySy
 	//physicsSystem.Update(TickDelay);
 	velocitySystem.Update(TickDelay);
 	networkSystem.Update();
+}
+
+entt::handle spawn_collectible(GameData& gameData)
+{
+	entt::entity newCollectible = gameData.registry.create();
+
+	// random spawn position
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_real_distribution<float> disX(WORLD_MIN_X, WORLD_MAX_X);
+	std::uniform_real_distribution<float> disY(WORLD_MIN_Y, WORLD_MAX_Y);
+
+	float spawnX = disX(gen);
+	float spawnY = disY(gen);
+
+	auto& transform = gameData.registry.emplace<Sel::Transform>(newCollectible);
+	transform.SetPosition({ spawnX, spawnY });
+	transform.SetRotation(0.f);
+	transform.SetScale({ 0.5f, 0.5f });
+
+	auto& network = gameData.registry.emplace<NetworkedComponent>(newCollectible);
+
+	auto& collectibleType = gameData.registry.emplace<CollectibleFlag>(newCollectible);
+	collectibleType.type = CollectibleType::Fire;
+
+	// On crée un handle
+	entt::handle handle = entt::handle(gameData.registry, newCollectible);
+
+	// On l'ajoute à la liste d'entité
+	gameData.networkToEntity[network.networkId] = handle;
+
+	return handle;
 }

@@ -1,6 +1,7 @@
 #include "sv_networksystem.h"
 #include "sv_networkedcomponent.h"
 #include "sh_protocol.h"
+#include "sh_constants.h"
 #include "sv_gamedata.h"
 #include <Sel/RigidBodyComponent.hpp>
 #include <Sel/Transform.hpp>
@@ -8,7 +9,7 @@
 #include <Sel/VelocityComponent.hpp>
 
 NetworkSystem::NetworkSystem(entt::registry& registry, GameData& gameData) :
-	m_networkObserver(registry, entt::collector.group<Sel::Transform, NetworkedComponent, Sel::VelocityComponent>()),
+	m_networkObserver(registry, entt::collector.group<Sel::Transform, NetworkedComponent>()),
 	m_registry(registry),
 	m_gameData(gameData),
 	m_nextShapeId(0)
@@ -19,30 +20,14 @@ NetworkSystem::NetworkSystem(entt::registry& registry, GameData& gameData) :
 
 void NetworkSystem::CreateAllEntities(ENetPeer* peer)
 {
-	auto view = m_registry.view<NetworkedComponent, Sel::Transform, Sel::VelocityComponent>();
+	auto view = m_registry.view<NetworkedComponent, Sel::Transform>();
 	for (entt::entity entity : view)
 	{
 		auto& transform = view.get<Sel::Transform>(entity);
 		auto& networked = view.get<NetworkedComponent>(entity);
-		auto& velocity = view.get<Sel::VelocityComponent>(entity);
 
-		CreateBrawlerPacket createBrawler;
-		createBrawler.brawlerId = networked.networkId;
-		createBrawler.position = transform.GetPosition();
-		createBrawler.linearVelocity = velocity.linearVel;
-		createBrawler.scale = transform.GetScale().x;
-
-		ENetPacket* createBrawlerPacket = build_packet(createBrawler, ENET_PACKET_FLAG_RELIABLE);
-		enet_peer_send(peer, 0, createBrawlerPacket);
-	}
-}
-
-void NetworkSystem::Update()
-{
-	m_networkObserver.each([&](entt::entity entity)
+		if (m_registry.any_of<BrawlerFlag>(entity))
 		{
-			auto& transform = m_registry.get<Sel::Transform>(entity);
-			auto& networked = m_registry.get<NetworkedComponent>(entity);
 			auto& velocity = m_registry.get<Sel::VelocityComponent>(entity);
 
 			CreateBrawlerPacket createBrawler;
@@ -52,11 +37,65 @@ void NetworkSystem::Update()
 			createBrawler.scale = transform.GetScale().x;
 
 			ENetPacket* createBrawlerPacket = build_packet(createBrawler, ENET_PACKET_FLAG_RELIABLE);
+			enet_peer_send(peer, 0, createBrawlerPacket);
+		}
+		else if (m_registry.any_of<CollectibleFlag>(entity))
+		{
+			auto& collectibleFlag = m_registry.get<CollectibleFlag>(entity);
+
+			CreateCollectiblePacket createCollectible;
+			createCollectible.collectibleId = networked.networkId;
+			createCollectible.position = transform.GetPosition();
+			createCollectible.scale = transform.GetScale().x;
+			createCollectible.type = collectibleFlag.type;
+
+			ENetPacket* createCollectiblePacket = build_packet(createCollectible, ENET_PACKET_FLAG_RELIABLE);
+			enet_peer_send(peer, 0, createCollectiblePacket);
+		}
+	}
+}
+
+void NetworkSystem::Update()
+{
+	m_networkObserver.each([&](entt::entity entity)
+		{
+			ENetPacket* createEntityPacket = nullptr;
+
+			auto& transform = m_registry.get<Sel::Transform>(entity);
+			auto& networked = m_registry.get<NetworkedComponent>(entity);
+
+			if (m_registry.any_of<BrawlerFlag>(entity))
+			{
+				auto& velocity = m_registry.get<Sel::VelocityComponent>(entity);
+
+				CreateBrawlerPacket createBrawler;
+				createBrawler.brawlerId = networked.networkId;
+				createBrawler.position = transform.GetPosition();
+				createBrawler.linearVelocity = velocity.linearVel;
+				createBrawler.scale = transform.GetScale().x;
+
+				createEntityPacket = build_packet(createBrawler, ENET_PACKET_FLAG_RELIABLE);
+			}
+			else if (m_registry.any_of<CollectibleFlag>(entity))
+			{
+				auto& collectibleFlag = m_registry.get<CollectibleFlag>(entity);
+
+				CreateCollectiblePacket createCollectible;
+				createCollectible.collectibleId = networked.networkId;
+				createCollectible.position = transform.GetPosition();
+				createCollectible.scale = transform.GetScale().x;
+				createCollectible.type = collectibleFlag.type;
+
+				createEntityPacket = build_packet(createCollectible, ENET_PACKET_FLAG_RELIABLE);
+			}
+
+			if (!createEntityPacket)
+				return;
 
 			for (const Player& player : m_gameData.players)
 			{
 				if (player.peer != nullptr && !player.name.empty()) //< Est-ce que le slot est occupé par un joueur (et est-ce que ce joueur a bien envoyé son nom) ?
-					enet_peer_send(player.peer, 0, createBrawlerPacket);
+					enet_peer_send(player.peer, 0, createEntityPacket);
 			}
 		});
 

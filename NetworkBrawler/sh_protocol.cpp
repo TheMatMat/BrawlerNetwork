@@ -354,3 +354,28 @@ PlayerInputsPacket PlayerInputsPacket::Deserialize(const std::vector<std::uint8_
 
 	return packet;
 }
+
+void CreateCollectiblePacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u32(byteArray, collectibleId);
+	Serialize_f32(byteArray, position.x);
+	Serialize_f32(byteArray, position.y);
+	Serialize_f32(byteArray, scale);
+	Serialize_u8(byteArray, static_cast<std::uint8_t>(type));
+}
+
+CreateCollectiblePacket CreateCollectiblePacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	CreateCollectiblePacket packet;
+
+	packet.collectibleId = Deserialize_u32(byteArray, offset);
+
+	float posX = Deserialize_f32(byteArray, offset);
+	float posY = Deserialize_f32(byteArray, offset);
+	packet.position = Sel::Vector2f(posX, posY);
+
+	packet.scale = Deserialize_f32(byteArray, offset);
+	packet.type = static_cast<CollectibleType>(Deserialize_u8(byteArray, offset));
+
+	return packet;
+}

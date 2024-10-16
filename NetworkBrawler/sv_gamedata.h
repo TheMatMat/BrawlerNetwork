@@ -27,8 +27,15 @@ struct GameData
 	}
 
 	Sel::Stopwatch clock;
+	Sel::Stopwatch collectibleClock;
 	float nextTick = 0.f;
 	float tickInterval = TickDelay;
+
+	float lastCollectibleSpawn = 0.f;
+	float nextCollectibleSpawn = 2.0f;
+	float collectibleSpawnInterval = 4.0f;
+	std::uint32_t collectibleMaxCount = 25;
+
 	std::vector<Player> players;
 	entt::registry& registry;
 	std::unordered_map<std::uint32_t, entt::handle> networkToEntity;

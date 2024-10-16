@@ -35,6 +35,7 @@
 #include "sh_inputs.h"
 #include "sh_brawler.h"
 #include "cl_brawler.h"
+#include "sv_networkedcomponent.h"
 
 struct PlayerData
 {
@@ -72,6 +73,8 @@ bool run_network(ENetHost* host, GameData& gameData);
 void tick(GameData& gameData);
 
 entt::handle CreateCamera(entt::registry& registry);
+Sel::Sprite BuildCollectibleSprite(float size);
+entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket& packet);
 
 int main()
 {
@@ -360,6 +363,45 @@ entt::handle CreateCamera(entt::registry& registry)
 	return entt::handle(registry, entity);
 }
 
+
+Sel::Sprite BuildCollectibleSprite(float size)
+{
+	Sel::ResourceManager& resourceManager = Sel::ResourceManager::Instance();
+	Sel::Sprite collectibleSprite(resourceManager.GetTexture("assets/ball.png"));
+
+	collectibleSprite.Resize(size, size);
+	collectibleSprite.SetOrigin({ 0.5f, 0.5f });
+	collectibleSprite.SetColor(Sel::Color(128.f, 0, 0));
+
+	return collectibleSprite;
+}
+
+entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket& packet)
+{
+	entt::entity newCollectible = gameData.registry->create();
+
+	// Add Transform
+	auto& transform = gameData.registry->emplace<Sel::Transform>(newCollectible);
+	transform.SetPosition(packet.position);
+	transform.SetRotation(0.f);
+	transform.SetScale({ packet.scale, packet.scale });
+
+	auto& collectibleType = gameData.registry->emplace<CollectibleFlag>(newCollectible);
+	collectibleType.type = CollectibleType::Fire;
+
+	// Add graphics component
+	auto& gfxComponent = gameData.registry->emplace<Sel::GraphicsComponent>(newCollectible);
+	gfxComponent.renderable = std::make_shared<Sel::Sprite>(BuildCollectibleSprite(75.f));
+
+	// On crée un handle
+	entt::handle handle = entt::handle(*(gameData.registry), newCollectible);
+
+	// On l'ajoute à la liste d'entité
+	gameData.networkToEntities[packet.collectibleId] = handle;
+
+	return handle;
+}
+
 void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData)
 {
 	// On décode l'opcode pour savoir à quel type de message on a affaire
@@ -379,6 +421,17 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			gameData.networkToEntities[packet.brawlerId] = brawler.GetHandle();
 
 			std::cout << "new Brawler" << std::endl;
+
+			break;
+		}
+		
+		case Opcode::S_CreateCollectible:
+		{
+			CreateCollectiblePacket packet = CreateCollectiblePacket::Deserialize(message, offset);
+
+			SpawnCollectible(gameData, packet);
+
+			std::cout << "new Collectible" << std::endl;
 
 			break;
 		}

@@ -11,10 +11,15 @@ const std::uint16_t AppPort = 14769;
 const int WINDOW_WIDTH = 850;
 const int WINDOW_LENGHT = 520;
 
-// Taille de base des éléments
-constexpr float BoxSize = 64.f;
-constexpr float CircleRadius = 32.f;
-constexpr float SegmentLength = 128.f;
+const float WORLD_MIN_X = -500.f;
+const float WORLD_MAX_X = 500.f;
+const float WORLD_MIN_Y = -500.f;
+const float WORLD_MAX_Y = 500.f;
+
+enum class CollectibleType : std::uint8_t
+{
+	Fire,
+};
 
 // Tickrate physique et réseau
 constexpr float TickDelay = 1.f / 30.f;

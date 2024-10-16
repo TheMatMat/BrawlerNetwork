@@ -20,12 +20,12 @@ BrawlerClient::BrawlerClient(entt::registry& registry, const Sel::Vector2f& posi
     }
 }
 
-Sel::Sprite BrawlerClient::BuildSprite(float scale)
+Sel::Sprite BrawlerClient::BuildSprite(float size)
 {
     Sel::ResourceManager& resourceManager = Sel::ResourceManager::Instance();
     Sel::Sprite brawlerSprite(resourceManager.GetTexture("assets/ball.png"));
 
-    brawlerSprite.Resize(scale, scale);
+    brawlerSprite.Resize(size, size);
     brawlerSprite.SetOrigin({ 0.5f, 0.5f });
 
     return brawlerSprite;

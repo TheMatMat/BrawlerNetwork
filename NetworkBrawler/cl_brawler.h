@@ -15,5 +15,5 @@ public:
     ~BrawlerClient() = default;
 
 protected:
-    Sel::Sprite BuildSprite(float scale);
+    Sel::Sprite BuildSprite(float size);
 };

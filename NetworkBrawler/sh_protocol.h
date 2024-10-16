@@ -25,9 +25,20 @@ enum class Opcode : std::uint8_t
 	C_CreateBrawlerRequest,
 	C_PlayerInputs,
 	S_CreateBrawler,
+	S_CreateCollectible,
 	S_BrawlerStates,
 	S_DeleteBrawler,
 	S_UpdateSelfBrawlerId,
+};
+
+struct BrawlerFlag
+{
+
+};
+
+struct CollectibleFlag
+{
+	CollectibleType type;
 };
 
 // Comme plusieurs paquets vont s'envoyer des informations de shapes, on peut les réunir
@@ -61,7 +72,7 @@ struct PlayerNamePacket
 	static PlayerNamePacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
-// Un joueur souhaite créer son brawler
+// Le serveur indique la création d'un brawler
 struct CreateBrawlerPacket
 {
 	static constexpr Opcode opcode = Opcode::S_CreateBrawler;
@@ -74,6 +85,21 @@ struct CreateBrawlerPacket
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static CreateBrawlerPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
+// Le serveur indique la création d'un collectible
+struct CreateCollectiblePacket
+{
+	static constexpr Opcode opcode = Opcode::S_CreateCollectible;
+
+	/*BrawlerData brawlerData;*/
+	std::uint32_t collectibleId;
+	Sel::Vector2f position;
+	float scale;
+	CollectibleType type;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static CreateCollectiblePacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
 

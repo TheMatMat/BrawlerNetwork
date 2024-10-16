@@ -39,6 +39,8 @@ Brawler::Brawler(entt::registry& registry, const Sel::Vector2f& position, float 
     // Init Network Component
     registry.emplace<NetworkedComponent>(brawler);
 
+    registry.emplace<BrawlerFlag>(brawler);
+
     m_handle = entt::handle(registry, brawler);
 }
 
