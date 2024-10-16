@@ -51,6 +51,10 @@ struct ClientNetworkId
 
 struct GameData
 {
+	Sel::Stopwatch clock;
+	float nextTick = 0.f;
+	float tickInterval = TickDelay;
+
 	std::vector<PlayerData> players;
 	ENetPeer* serverPeer; //< Le serveur
 	entt::registry* registry;
@@ -58,6 +62,9 @@ struct GameData
 	PlayerInputs inputs; //< Les inputs du joueur
 	std::size_t ownPlayerIndex; //< Notre propre ID
 	std::optional<std::uint32_t> ownBrawlerNetworkIndex; //< l'ID reseau de notre brawler
+
+	float interpolationFactor = 0.f;
+	std::vector<BrawlerStatesPacket> snapshots;
 };
 
 void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData);
@@ -256,6 +263,7 @@ int main()
 	bool isOpen = true;
 	while (isOpen)
 	{
+		float now = gameData.clock.GetElapsedTime();
 		float deltaTime = clock.Restart();
 
 		SDL_Event event;
@@ -320,7 +328,17 @@ int main()
 
 		renderer.Present();
 
-		tick(gameData);
+		// On vérifie si assez de temps s'est écoulé pour faire avancer la logique du jeu
+		if (now >= gameData.nextTick)
+		{
+			//worldLimit.Update();
+
+			// On met à jour la logique du jeu
+			tick(gameData);
+
+			// On prévoit la prochaine mise à jour
+			gameData.nextTick += gameData.tickInterval;
+		}
 	}
 
 	// On prévient le serveur qu'on s'est déconnecté
@@ -387,6 +405,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 		{
 			BrawlerStatesPacket packet = BrawlerStatesPacket::Deserialize(message, offset);
 
+
 			for (const auto& state : packet.brawlers)
 			{
 				auto it = gameData.networkToEntities.find(state.brawlerId);
@@ -401,6 +420,9 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 				auto& velocity = brawlerEntity.get<Sel::VelocityComponent>();
 				velocity.linearVel = state.linearVelocity;
 			}
+
+			gameData.snapshots.push_back(std::move(packet));
+
 			break;
 		}
 
