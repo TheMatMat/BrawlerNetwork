@@ -70,6 +70,7 @@ struct CreateBrawlerPacket
 	std::uint32_t brawlerId;
 	Sel::Vector2f position;
 	Sel::Vector2f linearVelocity;
+	float scale;
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static CreateBrawlerPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);

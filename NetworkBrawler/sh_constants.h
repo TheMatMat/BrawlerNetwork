@@ -8,6 +8,9 @@
 
 const std::uint16_t AppPort = 14769;
 
+const int WINDOW_WIDTH = 850;
+const int WINDOW_LENGHT = 520;
+
 // Taille de base des éléments
 constexpr float BoxSize = 64.f;
 constexpr float CircleRadius = 32.f;

@@ -13,6 +13,7 @@
 #include "sh_brawler.h"
 #include <Sel/VelocitySystem.hpp>
 #include "sv_networkedcomponent.h"
+#include <random>
 
 ENetPacket* build_playerlist_packet(GameData& gameData);
 
@@ -220,10 +221,16 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 		{
 			std::cout << "Player " << player.name << " wants to spawn its brawler" << std::endl;
 
-			// On cree le brawler coté serveur
-			Brawler brawler(gameData.registry, Sel::Vector2f(100.f, 20.f), 0.f, 1.f, Sel::Vector2f(10.f, 0.f));
-			auto network = brawler.GetHandle().try_get<NetworkedComponent>();
+			std::random_device rd;  // Seed for the random number engine
+			std::mt19937 gen(rd()); // Mersenne Twister engine
+			std::uniform_real_distribution<> dis(0.3, 0.8); // Range [0.0, 1.0)
 
+			float randomScale = dis(gen);
+
+			// On cree le brawler coté serveur
+			Brawler brawler(gameData.registry, Sel::Vector2f(100.f, 20.f), 0.f, randomScale, Sel::Vector2f(10.f, 0.f));
+
+			auto network = brawler.GetHandle().try_get<NetworkedComponent>();
 			if (!network)
 				break;
 

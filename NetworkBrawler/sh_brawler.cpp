@@ -17,7 +17,7 @@ Brawler::Brawler(entt::registry& registry) :
 Brawler::Brawler(entt::registry& registry, const Sel::Vector2f& position, float rotation, float scale, const Sel::Vector2f& linearVelocity) :
     m_position(position),
     m_linearVelocity(linearVelocity),
-    m_speed(50.f)
+    m_speed(100.f)
 {
     entt::entity brawler = registry.create();
 
@@ -25,6 +25,7 @@ Brawler::Brawler(entt::registry& registry, const Sel::Vector2f& position, float 
     auto& transform = registry.emplace<Sel::Transform>(brawler);
     transform.SetPosition(position);
     transform.SetRotation(rotation);
+
     transform.SetScale({scale, scale});
 
     // Init RigidBody Component

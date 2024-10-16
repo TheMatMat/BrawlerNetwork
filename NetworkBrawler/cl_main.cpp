@@ -156,7 +156,7 @@ int main()
 
 	Sel::Core core;
 
-	Sel::Window window("Braaaaaawl", 1280, 720);
+	Sel::Window window("Braaaaaawl", WINDOW_WIDTH, WINDOW_LENGHT);
 	Sel::Renderer renderer(window, SDL_RENDERER_PRESENTVSYNC);
 
 	Sel::ResourceManager resourceManager(renderer);
@@ -301,6 +301,18 @@ int main()
 		}
 		ImGui::End();
 
+		// Center camera on our brawler
+		if (gameData.ownBrawlerNetworkIndex)
+		{
+			auto it = gameData.networkToEntities.find(gameData.ownBrawlerNetworkIndex.value());
+			if (it != gameData.networkToEntities.end())
+			{
+				auto& transformCamera = registry.get<Sel::Transform>(cameraEntity);
+				auto& transformEntity = registry.get<Sel::Transform>(it->second);
+				transformCamera.SetPosition(transformEntity.GetGlobalPosition() - Sel::Vector2f(WINDOW_WIDTH * 0.5f, WINDOW_LENGHT * 0.5f));
+			}
+		}
+
 		if (worldEditor)
 			worldEditor->Render();
 
@@ -342,8 +354,9 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			CreateBrawlerPacket packet = CreateBrawlerPacket::Deserialize(message, offset);
 			Sel::Vector2f position = packet.position;
 			Sel::Vector2f linearVelocity = packet.linearVelocity;
+			float scale = packet.scale;
 
-			BrawlerClient brawler(*(gameData.registry), position, 0.f, 1.f, linearVelocity);
+			BrawlerClient brawler(*(gameData.registry), position, 0.f, scale, linearVelocity);
 
 			gameData.networkToEntities[packet.brawlerId] = brawler.GetHandle();
 

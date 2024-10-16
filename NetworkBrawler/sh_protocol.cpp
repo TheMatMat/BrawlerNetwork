@@ -32,6 +32,7 @@ void CreateBrawlerPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 	Serialize_f32(byteArray, position.y);
 	Serialize_f32(byteArray, linearVelocity.x);
 	Serialize_f32(byteArray, linearVelocity.y);
+	Serialize_f32(byteArray, scale);
 }
 
 CreateBrawlerPacket CreateBrawlerPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
@@ -46,6 +47,8 @@ CreateBrawlerPacket CreateBrawlerPacket::Deserialize(const std::vector<std::uint
 	float velX = Deserialize_f32(byteArray, offset);
 	float velY = Deserialize_f32(byteArray, offset);
 	packet.linearVelocity = Sel::Vector2f(velX, velY);
+
+	packet.scale = Deserialize_f32(byteArray, offset);
 
 	return packet;
 }

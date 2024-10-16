@@ -30,6 +30,7 @@ void NetworkSystem::CreateAllEntities(ENetPeer* peer)
 		createBrawler.brawlerId = networked.networkId;
 		createBrawler.position = transform.GetPosition();
 		createBrawler.linearVelocity = velocity.linearVel;
+		createBrawler.scale = transform.GetScale().x;
 
 		ENetPacket* createBrawlerPacket = build_packet(createBrawler, ENET_PACKET_FLAG_RELIABLE);
 		enet_peer_send(peer, 0, createBrawlerPacket);
@@ -48,6 +49,7 @@ void NetworkSystem::Update()
 			createBrawler.brawlerId = networked.networkId;
 			createBrawler.position = transform.GetPosition();
 			createBrawler.linearVelocity = velocity.linearVel;
+			createBrawler.scale = transform.GetScale().x;
 
 			ENetPacket* createBrawlerPacket = build_packet(createBrawler, ENET_PACKET_FLAG_RELIABLE);
 
