@@ -15,20 +15,23 @@
 enum class Opcode : std::uint8_t
 {
 	C_PlayerName,
-	C_CreateShapeRequest,
+	/*C_CreateShapeRequest,
 	C_DeleteShapeRequest,
 	S_CreateShape,
 	S_DeleteShape,
-	S_PlayerList,
-	S_ShapeStates,
+	S_ShapeStates,*/
 
+	S_PlayerList,
 	C_CreateBrawlerRequest,
 	C_PlayerInputs,
+	C_PlayerReady,
 	S_CreateBrawler,
 	S_CreateCollectible,
 	S_BrawlerStates,
 	S_DeleteBrawler,
 	S_UpdateSelfBrawlerId,
+	S_UpdateGameState,
+	S_CollectibleCollected
 };
 
 struct BrawlerFlag
@@ -39,6 +42,18 @@ struct BrawlerFlag
 struct CollectibleFlag
 {
 	CollectibleType type;
+};
+
+struct DeadFlag
+{
+
+};
+
+struct LeaderBoardData
+{
+	ENetPeer* peer;
+	std::uint16_t score;
+	bool isDead;
 };
 
 // Comme plusieurs paquets vont s'envoyer des informations de shapes, on peut les réunir
@@ -70,6 +85,26 @@ struct PlayerNamePacket
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static PlayerNamePacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
+struct PlayerReadyPacket
+{
+	static constexpr Opcode opcode = Opcode::C_PlayerReady;
+
+	bool newReadyValue;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static PlayerReadyPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
+struct UpdateGameStatePacket
+{
+	static constexpr Opcode opcode = Opcode::S_UpdateGameState;
+
+	std::uint8_t newGameState;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static UpdateGameStatePacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
 // Le serveur indique la création d'un brawler
@@ -143,6 +178,15 @@ struct UpdateSelfBrawlerId
 	static UpdateSelfBrawlerId Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
+// Le serveur indique au joueur qu'il a recup un collectible
+struct CollectibleCollectedPacket
+{
+	static constexpr Opcode opcode = Opcode::S_CollectibleCollected;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static CollectibleCollectedPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
 // Le serveur envoie les données sur tous les brawlers
 struct BrawlerStatesPacket
 {
@@ -162,14 +206,14 @@ struct BrawlerStatesPacket
 };
 
 // Le serveur annonce qu'un brawler cesse d'exister
-struct DeleteBrawlerPacket
+struct DeleteEntityPacket
 {
 	static constexpr Opcode opcode = Opcode::S_DeleteBrawler;
 
 	std::uint32_t brawlerId;
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
-	static DeleteBrawlerPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+	static DeleteEntityPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
 void Serialize_color(std::vector<std::uint8_t>& byteArray, const Sel::Color& value);

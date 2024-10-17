@@ -128,7 +128,7 @@ void NetworkSystem::OnNetworkedDestruct(entt::registry& registry, entt::entity e
 {
 	auto& networked = m_registry.get<NetworkedComponent>(entity);
 
-	DeleteBrawlerPacket deleteBrawler;
+	DeleteEntityPacket deleteBrawler;
 	deleteBrawler.brawlerId = networked.networkId;
 
 	ENetPacket* deleteShapePacket = build_packet(deleteBrawler, ENET_PACKET_FLAG_RELIABLE);

@@ -90,14 +90,14 @@ BrawlerStatesPacket BrawlerStatesPacket::Deserialize(const std::vector<std::uint
 	return packet;
 }
 
-void DeleteBrawlerPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+void DeleteEntityPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 {
 	Serialize_u32(byteArray, brawlerId);
 }
 
-DeleteBrawlerPacket DeleteBrawlerPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+DeleteEntityPacket DeleteEntityPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
 {
-	DeleteBrawlerPacket packet;
+	DeleteEntityPacket packet;
 
 	packet.brawlerId = Deserialize_u32(byteArray, offset);
 
@@ -376,6 +376,44 @@ CreateCollectiblePacket CreateCollectiblePacket::Deserialize(const std::vector<s
 
 	packet.scale = Deserialize_f32(byteArray, offset);
 	packet.type = static_cast<CollectibleType>(Deserialize_u8(byteArray, offset));
+
+	return packet;
+}
+
+void CollectibleCollectedPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+}
+
+CollectibleCollectedPacket CollectibleCollectedPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	return CollectibleCollectedPacket();
+}
+
+void UpdateGameStatePacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u8(byteArray, newGameState);
+}
+
+UpdateGameStatePacket UpdateGameStatePacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	UpdateGameStatePacket packet;
+	
+	packet.newGameState = Deserialize_u8(byteArray, offset);
+
+	return packet;
+}
+
+
+void PlayerReadyPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u8(byteArray, newReadyValue);
+}
+
+PlayerReadyPacket PlayerReadyPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	PlayerReadyPacket packet;
+	
+	packet.newReadyValue = Deserialize_u8(byteArray, offset);
 
 	return packet;
 }

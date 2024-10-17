@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 #include <optional>
+#include <algorithm>
 #include <vector>
 #include <unordered_map>
 #include <Sel/Color.hpp>
@@ -55,6 +56,13 @@ struct GameData
 	Sel::Stopwatch clock;
 	float nextTick = 0.f;
 	float tickInterval = TickDelay;
+
+	bool isReady = false;
+
+	GameState gameState;
+	PlayerMode playerMode;
+	std::uint8_t spectateIndex;
+	std::uint8_t playerScore; 
 
 	std::vector<PlayerData> players;
 	ENetPeer* serverPeer; //< Le serveur
@@ -184,6 +192,7 @@ int main()
 	Sel::VelocitySystem velocitySystem(registry);
 
 	gameData.registry = &registry;
+	gameData.gameState = GameState::Lobby;
 
 	Sel::ComponentRegistry componentRegistry;
 
@@ -254,13 +263,37 @@ int main()
 
 			//std::cout << "move Left : " << (int)(gameData.inputs.moveDown) << std::endl;
 		});
+
+		Sel::InputManager::Instance().BindKeyPressed(SDLK_SPACE, "Ready");
+		Sel::InputManager::Instance().BindAction("Ready", [&](bool pressed)
+			{
+				if (gameData.gameState == GameState::Lobby)
+				{
+					if (!pressed)
+						return;
+
+					gameData.isReady = !gameData.isReady;
+
+					PlayerReadyPacket packet;
+					packet.newReadyValue = gameData.isReady;
+
+					enet_peer_send(gameData.serverPeer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+				}
+			});
 	#pragma endregion
 
 	entt::handle cameraEntity = CreateCamera(registry);
 
 	// Le client souhaite construire son brawler
-	CreateBrawlerResquest packet;
-	enet_peer_send(gameData.serverPeer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+	if (gameData.gameState == GameState::Lobby)
+	{
+		CreateBrawlerResquest packet;
+		enet_peer_send(gameData.serverPeer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+	}
+	else
+	{
+		gameData.playerMode = PlayerMode::Spectating;
+	}
 
 	Sel::Stopwatch clock;
 	bool isOpen = true;
@@ -312,8 +345,8 @@ int main()
 		}
 		ImGui::End();
 
-		// Center camera on our brawler
-		if (gameData.ownBrawlerNetworkIndex)
+		// Center camera on our brawler if not spectating
+		if (gameData.ownBrawlerNetworkIndex && gameData.playerMode == PlayerMode::Playing)
 		{
 			auto it = gameData.networkToEntities.find(gameData.ownBrawlerNetworkIndex.value());
 			if (it != gameData.networkToEntities.end())
@@ -438,7 +471,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 
 		case Opcode::S_DeleteBrawler:
 		{
-			DeleteBrawlerPacket packet = DeleteBrawlerPacket::Deserialize(message, offset);
+			DeleteEntityPacket packet = DeleteEntityPacket::Deserialize(message, offset);
 
 			auto it = gameData.networkToEntities.find(packet.brawlerId);
 			if (it == gameData.networkToEntities.end())
@@ -485,6 +518,44 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			
 			gameData.ownBrawlerNetworkIndex = packet.id;
 
+			gameData.playerMode = PlayerMode::Playing;
+
+			break;
+		}
+
+		case Opcode::S_CollectibleCollected:
+		{
+			std::cout << "Collectible Recupere" << std::endl;
+
+			break;
+		}
+
+		case Opcode::S_UpdateGameState:
+		{
+			UpdateGameStatePacket packet = UpdateGameStatePacket::Deserialize(message, offset);
+
+			switch (static_cast<GameState>(packet.newGameState))
+			{
+				case GameState::Lobby:
+				{
+					// j'étais spectateur, je peux mtnt jouer je crée mon brawler
+					if (gameData.playerMode == PlayerMode::Spectating)
+					{
+						CreateBrawlerResquest packet;
+						enet_peer_send(gameData.serverPeer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+					}
+					else
+					{
+						gameData.playerScore = 0;
+					}
+
+					break;
+				}
+			}
+
+
+
+			gameData.gameState = static_cast<GameState>(packet.newGameState);
 			break;
 		}
 	}

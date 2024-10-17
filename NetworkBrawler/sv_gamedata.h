@@ -17,6 +17,9 @@ struct Player
 	std::string name; //< Nom du joueur
 	std::optional<Brawler> brawler;
 	std::optional<std::uint32_t> ownBrawlerNetworkId;
+	std::uint8_t playerScore = 0;
+	bool isReady;
+	bool isDead;
 };
 
 struct GameData
@@ -28,15 +31,27 @@ struct GameData
 
 	Sel::Stopwatch clock;
 	Sel::Stopwatch collectibleClock;
+	Sel::Stopwatch gameStartClock;
+	Sel::Stopwatch killClock;
+
 	float nextTick = 0.f;
 	float tickInterval = TickDelay;
 
+	float nextKill = 20.f;
+	float killInterval = 20.f;
+
+
 	float lastCollectibleSpawn = 0.f;
-	float nextCollectibleSpawn = 2.0f;
+	float nextCollectibleSpawn = 0.5f;
 	float collectibleSpawnInterval = 4.0f;
 	std::uint32_t collectibleMaxCount = 25;
 
+	GameState gamesState = GameState::Lobby;
+	bool allReady = false;
+
 	std::vector<Player> players;
+	std::vector<Player*> playingPlayers; // players in the game. filled at game start with players present in lobby
+	std::vector<Player*> leaderBoard; // reordered when score changes first is the highest score
 	entt::registry& registry;
 	std::unordered_map<std::uint32_t, entt::handle> networkToEntity;
 };

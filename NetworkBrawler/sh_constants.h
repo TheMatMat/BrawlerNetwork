@@ -21,6 +21,20 @@ enum class CollectibleType : std::uint8_t
 	Fire,
 };
 
+enum class GameState : std::uint8_t
+{
+	Lobby,
+	GameRunning,
+	EndScreen
+};
+
+enum class PlayerMode : std::uint8_t
+{
+	Playing,
+	Dead,
+	Spectating
+};
+
 // Tickrate physique et réseau
 constexpr float TickDelay = 1.f / 30.f;
 
