@@ -417,3 +417,17 @@ PlayerReadyPacket PlayerReadyPacket::Deserialize(const std::vector<std::uint8_t>
 
 	return packet;
 }
+
+void WinnerPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u32(byteArray, brawlerNetworkId);
+}
+
+WinnerPacket WinnerPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	WinnerPacket packet;
+
+	packet.brawlerNetworkId = Deserialize_u32(byteArray, offset);
+
+	return packet;
+}

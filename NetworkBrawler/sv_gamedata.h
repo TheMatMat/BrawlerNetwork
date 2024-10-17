@@ -49,6 +49,7 @@ struct GameData
 	GameState gamesState = GameState::Lobby;
 	bool allReady = false;
 
+	Player* lastWinner = nullptr;
 	std::vector<Player> players;
 	std::vector<Player*> playingPlayers; // players in the game. filled at game start with players present in lobby
 	std::vector<Player*> leaderBoard; // reordered when score changes first is the highest score

@@ -189,15 +189,36 @@ int main()
 
 			if (gameData.gamesState == GameState::GameRunning)
 			{
-				// Spawn un collectible si le temps d'attente est atteint et que l'on a pas atteint le nombre max de collectible
 				auto brawlerView = gameData.registry.view<BrawlerFlag>(entt::exclude<DeadFlag>);
 				int brawlerCount = std::distance(brawlerView.begin(), brawlerView.end());
 
 				if (brawlerCount <= 1)
 				{
+					// There's only one brawler left, find it
+					for (auto entity : brawlerView)
+					{
+						// Get the NetworkComponent of the last remaining brawler
+						auto& networkComp = gameData.registry.get<NetworkedComponent>(entity);
+						auto lastNetworkID = networkComp.networkId;
+
+						// Find the player whose ownBrawlerNetworkID matches lastNetworkID
+						auto it = std::find_if(gameData.playingPlayers.begin(), gameData.playingPlayers.end(),
+							[&lastNetworkID](Player* player)
+							{
+								return player->ownBrawlerNetworkId == lastNetworkID;
+							});
+
+						if (it != gameData.playingPlayers.end())
+						{
+							// Store the last winner in gameData
+							gameData.lastWinner = *it;
+
+							std::cout << gameData.lastWinner->name << " wins -> END GAME" << std::endl;
+						}
+					}
+
 					gameData.gamesState = GameState::EndScreen;
 					end_game(gameData);
-					std::cout << "1 more brawler remaining. He wins -> END GAME" << std::endl;
 				}
 				else
 				{
@@ -214,7 +235,7 @@ int main()
 						}
 					}
 
-					// System qui kill qqun à interval régulier
+					// System qui kill le dernier à interval régulier
 					if (brawlerCount > 0 && nowKill >= gameData.nextKill)
 					{
 
@@ -240,7 +261,7 @@ int main()
 
 								auto transform = gameData.registry.try_get<Sel::Transform>(entityIt->second);
 								if (transform)
-									transform->SetPosition({ -10000.f, -1000.f }); // On le place très loin
+									transform->SetPosition({ -10000.f, -10000.f }); // On le place très loin
 
 							}
 
@@ -265,6 +286,9 @@ int main()
 		{
 			gameData.allReady = false;
 			gameData.gamesState = GameState::GameRunning;
+
+			start_game(gameData);
+
 			gameData.killClock.Restart();
 			std::cout << "START GAME!" << std::endl;
 
@@ -272,15 +296,14 @@ int main()
 			UpdateGameStatePacket packet;
 			packet.newGameState = static_cast<std::uint8_t>(gameData.gamesState);
 
-			for (const auto& player : gameData.players)
+			for (const auto& player : gameData.playingPlayers)
 			{
-				if (!player.peer)
+				if (!player->peer)
 					continue;
 
-				enet_peer_send(player.peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+				enet_peer_send(player->peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
 			}
 
-			start_game(gameData);
 		}
 	}
 
@@ -387,8 +410,39 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 		{
 			PlayerReadyPacket packet = PlayerReadyPacket::Deserialize(message, offset);
 
+			if (gameData.gamesState == GameState::EndScreen)
+			{
+				gameData.gamesState = GameState::Lobby;
+
+				// On ramène tout le monde au centre
+				auto view = gameData.registry.view<Sel::Transform, BrawlerFlag>();
+				for (auto&& [entity, transform, flag] : view.each())
+				{
+					transform.SetPosition(Sel::Vector2f(0.f, 0.f));
+
+					if (gameData.registry.all_of<DeadFlag>(entity))
+						gameData.registry.remove<DeadFlag>(entity);
+				}
+
+				UpdateGameStatePacket packet;
+				packet.newGameState = static_cast<std::uint8_t>(gameData.gamesState);
+				
+				for (auto& player : gameData.players)
+				{
+					if (!player.peer)
+						continue;
+							
+					player.isReady = false;
+					player.isDead = false;
+					enet_peer_send(player.peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+				}
+
+				break;
+			}
+
 			std::cout << "player " << player.index << " ready state is: " << static_cast<int>(packet.newReadyValue) << std::endl;
 			player.isReady = packet.newReadyValue;
+
 
 			// Qqn se met pas prêt
 			if (!packet.newReadyValue)
@@ -489,16 +543,6 @@ void start_game(GameData& gameData)
 		player.playerScore = 0;
 		player.isDead = false;
 
-		// Find the entity associated with this player in the NetworkToEntities map
-		auto entityIt = gameData.networkToEntity.find(player.ownBrawlerNetworkId.value());
-		if (entityIt != gameData.networkToEntity.end())
-		{
-			if (gameData.registry.all_of<DeadFlag>(entityIt->second))
-			{
-				gameData.registry.remove<DeadFlag>(entityIt->second);
-			}
-		}
-
 		gameData.playingPlayers.push_back(&player);
 		gameData.leaderBoard.push_back(&player);
 	}
@@ -520,17 +564,22 @@ void end_game(GameData& gameData)
 		velocity.linearVel = Sel::Vector2f(0.f, 0.f);
 	}
 
-	gameData.gamesState = GameState::Lobby;
-	UpdateGameStatePacket packet;
-	packet.newGameState = static_cast<std::uint8_t>(gameData.gamesState);
+	// Notifions tout le monde qu'il y a un gagnant
+	WinnerPacket packet;
+	packet.brawlerNetworkId = gameData.lastWinner->index;
 
-	for (auto& player : gameData.players)
+	UpdateGameStatePacket gameStatePacket;
+	gameStatePacket.newGameState = static_cast<std::uint8_t>(gameData.gamesState);
+
+	for (auto& player : gameData.playingPlayers)
 	{
-		if (!player.peer)
+		if (!player->peer)
 			continue;
 
-		enet_peer_send(player.peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+		enet_peer_send(player->peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+		enet_peer_send(player->peer, 0, build_packet(gameStatePacket, ENET_PACKET_FLAG_RELIABLE));
 	}
+
 }
 
 void update_leaderboard(GameData& gameData)

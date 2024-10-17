@@ -31,12 +31,13 @@ enum class Opcode : std::uint8_t
 	S_DeleteBrawler,
 	S_UpdateSelfBrawlerId,
 	S_UpdateGameState,
-	S_CollectibleCollected
+	S_CollectibleCollected,
+	S_Winner,
 };
 
 struct BrawlerFlag
 {
-
+	std::uint8_t id;
 };
 
 struct CollectibleFlag
@@ -120,6 +121,17 @@ struct CreateBrawlerPacket
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static CreateBrawlerPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
+// Le serveur notifie d'un winner
+struct WinnerPacket
+{
+	static constexpr Opcode opcode = Opcode::S_Winner;
+
+	std::uint32_t brawlerNetworkId;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static WinnerPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
 // Le serveur indique la création d'un collectible

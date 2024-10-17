@@ -267,7 +267,7 @@ int main()
 		Sel::InputManager::Instance().BindKeyPressed(SDLK_SPACE, "Ready");
 		Sel::InputManager::Instance().BindAction("Ready", [&](bool pressed)
 			{
-				if (gameData.gameState == GameState::Lobby)
+				if (gameData.gameState == GameState::Lobby || gameData.gameState == GameState::EndScreen)
 				{
 					if (!pressed)
 						return;
@@ -276,6 +276,7 @@ int main()
 
 					PlayerReadyPacket packet;
 					packet.newReadyValue = gameData.isReady;
+					
 
 					enet_peer_send(gameData.serverPeer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
 				}
@@ -538,6 +539,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			{
 				case GameState::Lobby:
 				{
+					gameData.isReady = false;
 					// j'étais spectateur, je peux mtnt jouer je crée mon brawler
 					if (gameData.playerMode == PlayerMode::Spectating)
 					{
@@ -553,9 +555,24 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 				}
 			}
 
-
+			std::cout << "GameState: " << (int)(gameData.gameState) << " -> " << (int)(packet.newGameState) << std::endl;
 
 			gameData.gameState = static_cast<GameState>(packet.newGameState);
+			break;
+		}
+
+		case Opcode::S_Winner:
+		{
+			WinnerPacket packet = WinnerPacket::Deserialize(message, offset);
+
+			if (!gameData.ownBrawlerNetworkIndex)
+				break;
+
+			if (gameData.ownBrawlerNetworkIndex == packet.brawlerNetworkId)
+			{
+				std::cout << "I am the winner" << std::endl;
+			}
+
 			break;
 		}
 	}
