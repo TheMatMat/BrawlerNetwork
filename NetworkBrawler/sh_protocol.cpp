@@ -27,18 +27,21 @@ PlayerNamePacket PlayerNamePacket::Deserialize(const std::vector<std::uint8_t>& 
 
 void CreateBrawlerPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 {
+	Serialize_u32(byteArray, playerId);
 	Serialize_u32(byteArray, brawlerId);
 	Serialize_f32(byteArray, position.x);
 	Serialize_f32(byteArray, position.y);
 	Serialize_f32(byteArray, linearVelocity.x);
 	Serialize_f32(byteArray, linearVelocity.y);
 	Serialize_f32(byteArray, scale);
+	Serialize_str(byteArray, brawlerName);
 }
 
 CreateBrawlerPacket CreateBrawlerPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
 {
 	CreateBrawlerPacket packet;
 
+	packet.playerId = Deserialize_u32(byteArray, offset);
 	packet.brawlerId = Deserialize_u32(byteArray, offset);
 	float posX = Deserialize_f32(byteArray, offset);
 	float posY = Deserialize_f32(byteArray, offset);
@@ -49,6 +52,8 @@ CreateBrawlerPacket CreateBrawlerPacket::Deserialize(const std::vector<std::uint
 	packet.linearVelocity = Sel::Vector2f(velX, velY);
 
 	packet.scale = Deserialize_f32(byteArray, offset);
+
+	packet.brawlerName = Deserialize_str(byteArray, offset);
 
 	return packet;
 }
@@ -303,11 +308,33 @@ std::string Deserialize_str(const std::vector<std::uint8_t>& byteArray, std::siz
 
 void PlayerListPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 {
+	Serialize_u16(byteArray, players.size());
+
+	for (const auto& player : players)
+	{
+		Serialize_u32(byteArray, player.id);
+		Serialize_str(byteArray, player.name);
+		Serialize_u8(byteArray, player.hasBrawler);
+		if (player.hasBrawler)
+			Serialize_u32(byteArray, player.brawlerId.value());
+	}
 }
 
 PlayerListPacket PlayerListPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
 {
-	return PlayerListPacket();
+	PlayerListPacket packet;
+	packet.players.resize(Deserialize_u16(byteArray, offset));
+
+	for (auto& player : packet.players)
+	{
+		player.id = Deserialize_u32(byteArray, offset);
+		player.name = Deserialize_str(byteArray, offset);
+		player.hasBrawler = Deserialize_u8(byteArray, offset);
+		if (player.hasBrawler)
+			player.brawlerId = Deserialize_u32(byteArray, offset);
+	}
+
+	return packet;
 }
 
 void CreateBrawlerResquest::Serialize(std::vector<std::uint8_t>& byteArray) const
@@ -428,6 +455,35 @@ WinnerPacket WinnerPacket::Deserialize(const std::vector<std::uint8_t>& byteArra
 	WinnerPacket packet;
 
 	packet.brawlerNetworkId = Deserialize_u32(byteArray, offset);
+
+	return packet;
+}
+
+void UpdateLeaderboardPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u32(byteArray, leaderboard.size());
+	for (auto& data : leaderboard)
+	{
+		Serialize_u32(byteArray, data.playerId);
+		Serialize_str(byteArray, data.playerName);
+		Serialize_u32(byteArray, data.playerScore);
+		Serialize_u8(byteArray, data.isDead);
+	}
+}
+
+UpdateLeaderboardPacket UpdateLeaderboardPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	UpdateLeaderboardPacket packet;
+
+	packet.leaderboard.resize(Deserialize_u32(byteArray, offset));
+
+	for (auto& data : packet.leaderboard)
+	{
+		data.playerId = Deserialize_u32(byteArray, offset);
+		data.playerName = Deserialize_str(byteArray, offset);
+		data.playerScore = Deserialize_u32(byteArray, offset);
+		data.isDead =Deserialize_u8(byteArray, offset);
+	}
 
 	return packet;
 }

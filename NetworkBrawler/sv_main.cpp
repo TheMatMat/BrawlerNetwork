@@ -96,6 +96,7 @@ int main()
 						gameData.allReady = false;
 					}
 
+
 					std::cout << "Player connected" << std::endl;
 					break;
 				}
@@ -263,6 +264,7 @@ int main()
 								if (transform)
 									transform->SetPosition({ -10000.f, -10000.f }); // On le place très loin
 
+								update_leaderboard(gameData);
 							}
 
 							break;
@@ -303,7 +305,6 @@ int main()
 
 				enet_peer_send(player->peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
 			}
-
 		}
 	}
 
@@ -320,8 +321,19 @@ ENetPacket* build_playerlist_packet(GameData& gameData)
 		{
 			// Oui, rajoutons-le à la liste
 			auto& packetPlayer = packet.players.emplace_back();
-			packetPlayer.color = player.color;
 			packetPlayer.name = player.name;
+			if (player.ownBrawlerNetworkId.has_value())
+			{
+				packetPlayer.id = player.index;
+				packetPlayer.hasBrawler = true;
+				packetPlayer.brawlerId = player.ownBrawlerNetworkId.value();
+			}
+			else
+			{
+				packetPlayer.id = player.index;
+				packetPlayer.hasBrawler = false;
+				packetPlayer.brawlerId.reset();
+			}
 		}
 	}
 
@@ -365,14 +377,16 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 		{
 			std::cout << "Player " << player.name << " wants to spawn its brawler" << std::endl;
 
-			std::random_device rd;  // Seed for the random number engine
-			std::mt19937 gen(rd()); // Mersenne Twister engine
-			std::uniform_real_distribution<> dis(0.3, 0.8); // Range [0.0, 1.0)
-
-			float randomScale = dis(gen);
-
 			// On cree le brawler coté serveur
-			Brawler brawler(gameData.registry, Sel::Vector2f(100.f, 20.f), 0.f, randomScale, Sel::Vector2f(10.f, 0.f));
+			Brawler brawler(gameData.registry, Sel::Vector2f(100.f, 20.f), 0.f, 1.f, Sel::Vector2f(10.f, 0.f));
+
+
+			// on lui donne l'id de son player
+			auto flag = brawler.GetHandle().try_get<BrawlerFlag>();
+			if (flag)
+			{
+				flag->playerId = player.index;
+			}
 
 			auto network = brawler.GetHandle().try_get<NetworkedComponent>();
 			if (!network)
@@ -546,6 +560,8 @@ void start_game(GameData& gameData)
 		gameData.playingPlayers.push_back(&player);
 		gameData.leaderBoard.push_back(&player);
 	}
+
+	update_leaderboard(gameData);
 }
 
 void end_game(GameData& gameData)
@@ -594,10 +610,30 @@ void update_leaderboard(GameData& gameData)
 		});
 
 	// Affichage du leaderboard après le tri
-	std::cout << "Leaderboard after update:\n";
+	/*std::cout << "Leaderboard after update:\n";
 	for (const auto& player : gameData.leaderBoard) {
 		std::cout << player->name << " - Score: " << (int)(player->playerScore)
 			<< (player->isDead ? " (Dead)\n" : " (Alive)\n");
 	}
-	std::cout << std::endl;
+	std::cout << std::endl;*/
+
+	// On notifie tout le monde du changement de leadearboard
+	UpdateLeaderboardPacket packet;
+
+	for (auto& playerData : gameData.leaderBoard)
+	{
+		auto& data = packet.leaderboard.emplace_back();
+		data.playerId = playerData->index;
+		data.playerName = playerData->name;
+		data.playerScore = playerData->playerScore;
+		data.isDead = playerData->isDead;
+	}
+
+	for (auto& player : gameData.players)
+	{
+		if (!player.peer)
+			continue;
+
+		enet_peer_send(player.peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+	}
 }

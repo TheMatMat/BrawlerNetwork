@@ -11,6 +11,8 @@ const std::uint16_t AppPort = 14769;
 const int WINDOW_WIDTH = 850;
 const int WINDOW_LENGHT = 520;
 
+const float SCREEN_MARGIN = 10.f;
+
 const float WORLD_MIN_X = -500.f;
 const float WORLD_MAX_X = 500.f;
 const float WORLD_MIN_Y = -500.f;
@@ -33,6 +35,13 @@ enum class PlayerMode : std::uint8_t
 	Playing,
 	Dead,
 	Spectating
+};
+
+enum class BrawlerSkin : std::uint8_t
+{
+	Rabbit,
+	Sheep,
+	Turtle
 };
 
 // Tickrate physique et réseau

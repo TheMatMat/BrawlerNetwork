@@ -28,9 +28,11 @@ void NetworkSystem::CreateAllEntities(ENetPeer* peer)
 
 		if (m_registry.any_of<BrawlerFlag>(entity))
 		{
+			auto& flag = m_registry.get<BrawlerFlag>(entity);
 			auto& velocity = m_registry.get<Sel::VelocityComponent>(entity);
 
 			CreateBrawlerPacket createBrawler;
+			createBrawler.playerId = flag.playerId;
 			createBrawler.brawlerId = networked.networkId;
 			createBrawler.position = transform.GetPosition();
 			createBrawler.linearVelocity = velocity.linearVel;
@@ -67,8 +69,10 @@ void NetworkSystem::Update()
 			if (m_registry.any_of<BrawlerFlag>(entity))
 			{
 				auto& velocity = m_registry.get<Sel::VelocityComponent>(entity);
+				auto& flag = m_registry.get<BrawlerFlag>(entity);
 
 				CreateBrawlerPacket createBrawler;
+				createBrawler.playerId = flag.playerId;
 				createBrawler.brawlerId = networked.networkId;
 				createBrawler.position = transform.GetPosition();
 				createBrawler.linearVelocity = velocity.linearVel;

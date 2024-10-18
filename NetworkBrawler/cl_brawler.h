@@ -6,14 +6,18 @@
 #include <Sel/GraphicsComponent.hpp>
 #include <Sel/ResourceManager.hpp>
 #include <Sel/GraphicsComponent.hpp>
+#include <Sel/SpritesheetComponent.hpp>
+#include <Sel/Transform.hpp>
+#include <Sel/Renderer.hpp>
+#include <Sel/Font.hpp>
 
 class BrawlerClient : public Brawler
 {
 public:
-    BrawlerClient(entt::registry& registry);
+    BrawlerClient(entt::registry& registry, Sel::Renderer& renderer);
     BrawlerClient(entt::registry& registry, const Sel::Vector2f& position, float rotation, float scale, const Sel::Vector2f& linearVelocity);
     ~BrawlerClient() = default;
 
 protected:
-    Sel::Sprite BuildSprite(float size);
+    Sel::Sprite BuildSprite(float size, Sel::ResourceManager& resourceManager);
 };

@@ -32,12 +32,13 @@ enum class Opcode : std::uint8_t
 	S_UpdateSelfBrawlerId,
 	S_UpdateGameState,
 	S_CollectibleCollected,
+	S_UpdateLeaderboard,
 	S_Winner,
 };
 
 struct BrawlerFlag
 {
-	std::uint8_t id;
+	std::uint32_t playerId;
 };
 
 struct CollectibleFlag
@@ -46,6 +47,11 @@ struct CollectibleFlag
 };
 
 struct DeadFlag
+{
+
+};
+
+struct LeaderBoardLine
 {
 
 };
@@ -112,12 +118,13 @@ struct UpdateGameStatePacket
 struct CreateBrawlerPacket
 {
 	static constexpr Opcode opcode = Opcode::S_CreateBrawler;
-
-	/*BrawlerData brawlerData;*/
+	
+	std::uint32_t playerId;
 	std::uint32_t brawlerId;
 	Sel::Vector2f position;
 	Sel::Vector2f linearVelocity;
 	float scale;
+	std::string brawlerName;
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static CreateBrawlerPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
@@ -169,8 +176,10 @@ struct PlayerListPacket
 
 	struct Player
 	{
+		std::uint32_t id;
 		std::string name;
-		Sel::Color color;
+		bool hasBrawler;
+		std::optional<std::uint32_t> brawlerId;
 	};
 
 	std::vector<Player> players;
@@ -197,6 +206,25 @@ struct CollectibleCollectedPacket
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static CollectibleCollectedPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
+// Le serveur indique aux joueurs un changement de leaderboard
+struct UpdateLeaderboardPacket
+{
+	static constexpr Opcode opcode = Opcode::S_UpdateLeaderboard;
+
+	struct Data
+	{
+		std::uint32_t playerId;
+		std::string playerName;
+		std::uint32_t playerScore;
+		bool isDead;
+	};
+
+	std::vector<Data> leaderboard; // first to last
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static UpdateLeaderboardPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
 // Le serveur envoie les données sur tous les brawlers

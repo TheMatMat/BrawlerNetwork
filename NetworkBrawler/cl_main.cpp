@@ -15,6 +15,7 @@
 #include <Sel/ComponentRegistry.hpp>
 #include <Sel/Stopwatch.hpp>
 #include <Sel/GraphicsComponent.hpp>
+#include <Sel/Font.hpp>
 #include <Sel/InputManager.hpp>
 #include <Sel/Model.hpp>
 #include <Sel/PhysicsSystem.hpp>
@@ -37,13 +38,12 @@
 #include "sh_brawler.h"
 #include "cl_brawler.h"
 #include "sv_networkedcomponent.h"
+#include "cl_FloatingEntitySystem.h"
 
 struct PlayerData
 {
 	std::string name;
-	Sel::Color color;
-	std::optional<BrawlerClient> brawler;
-	std::optional<std::uint8_t> deathPositionIndex;
+	std::optional<std::uint32_t> ownBrawlerId;
 };
 
 struct ClientNetworkId
@@ -64,9 +64,12 @@ struct GameData
 	std::uint8_t spectateIndex;
 	std::uint8_t playerScore; 
 
-	std::vector<PlayerData> players;
+	std::string name;
+	std::map<std::uint32_t, PlayerData> players;
 	ENetPeer* serverPeer; //< Le serveur
 	entt::registry* registry;
+	Sel::Renderer* renderer;
+	FloatingEntitySystem* floatingEntitySystem;
 	std::unordered_map<std::uint32_t /*networkId*/, entt::handle> networkToEntities; //< toutes les entités (ici tous les brawlers)
 	PlayerInputs inputs; //< Les inputs du joueur
 	std::size_t ownPlayerIndex; //< Notre propre ID
@@ -83,6 +86,7 @@ void tick(GameData& gameData);
 entt::handle CreateCamera(entt::registry& registry);
 Sel::Sprite BuildCollectibleSprite(float size);
 entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket& packet);
+entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std::string text, int fontSize, const Sel::Color& textColor, const std::string& fontPath, Sel::Vector2f origin = {0.5f, 0.5f});
 
 int main()
 {
@@ -176,6 +180,7 @@ int main()
 
 	Sel::Window window("Braaaaaawl", WINDOW_WIDTH, WINDOW_LENGHT);
 	Sel::Renderer renderer(window, SDL_RENDERER_PRESENTVSYNC);
+	gameData.renderer = &renderer;
 
 	Sel::ResourceManager resourceManager(renderer);
 	Sel::InputManager inputManager;
@@ -184,12 +189,21 @@ int main()
 	ImGui::SetCurrentContext(imgui.GetContext());
 
 	entt::registry registry;
+
+	/// ============ Animation & Rendering ============
 	Sel::RenderSystem renderSystem(renderer, registry);
+
+	Sel::AnimationSystem animationSystem(registry);
+	
+
 	Sel::PhysicsSystem physicsSystem(registry);
 	physicsSystem.SetGravity({ 0.f, 0.f });
 	physicsSystem.SetDamping(0.9f);
 
 	Sel::VelocitySystem velocitySystem(registry);
+
+	FloatingEntitySystem floatingEntitySystem(&registry);
+	gameData.floatingEntitySystem = &floatingEntitySystem;
 
 	gameData.registry = &registry;
 	gameData.gameState = GameState::Lobby;
@@ -216,6 +230,8 @@ int main()
 		namePacket.name = name;
 
 		enet_peer_send(gameData.serverPeer, 0, build_packet(namePacket, ENET_PACKET_FLAG_RELIABLE));
+
+		gameData.name = name;
 	}
 
 	//Inputs
@@ -330,7 +346,32 @@ int main()
 
 		//physicsSystem.Update(deltaTime);
 		//velocitySystem.Update(deltaTime);
+
+		auto viewBrawler = gameData.registry->view<BrawlerFlag, Sel::VelocityComponent, Sel::Transform, Sel::SpritesheetComponent>();
+		for (auto&& [entity, flag, velocity, transform, spritesheetComp] : viewBrawler.each())
+		{
+			if (velocity.linearVel.x < 0.f)
+			{
+				transform.SetScale({ -1.f, 1.f });
+			}
+			else if (velocity.linearVel.x > 0.f)
+			{
+				transform.SetScale({ 1.f, 1.f });
+			}
+			
+			if (velocity.linearVel.Magnitude() > 0.f)
+			{
+				spritesheetComp.PlayAnimation("running");
+			}
+			else
+			{
+				spritesheetComp.PlayAnimation("idle");
+			}
+		}
+
+		floatingEntitySystem.Update();
 		renderSystem.Update(deltaTime);
+		animationSystem.Update(deltaTime);
 
 		if (ImGui::Begin("Menu"))
 		{
@@ -436,6 +477,25 @@ entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket&
 	return handle;
 }
 
+entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std::string text, int fontSize, const Sel::Color& textColor, const std::string& fontPath, Sel::Vector2f origin)
+{
+	std::shared_ptr<Sel::Font> font = Sel::ResourceManager::Instance().GetFont(fontPath);
+	Sel::Surface surface = font->RenderUTF8Text(fontSize, text);
+	std::shared_ptr<Sel::Texture> tex = std::make_shared<Sel::Texture>(Sel::Texture::CreateFromSurface(renderer, surface));
+	std::shared_ptr<Sel::Sprite> sprite = std::make_shared<Sel::Sprite>(tex);
+	sprite->SetColor(textColor);
+	sprite->SetOrigin(origin);
+
+	auto entityText = gameData.registry->create();
+	gameData.registry->emplace<Sel::Transform>(entityText);
+	gameData.registry->emplace<Sel::GraphicsComponent>(entityText).renderable = std::move(sprite);
+
+	// On crée un handle
+	entt::handle handle = entt::handle(*(gameData.registry), entityText);
+
+	return handle;
+}
+
 void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData)
 {
 	// On décode l'opcode pour savoir à quel type de message on a affaire
@@ -443,6 +503,24 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 	Opcode opcode = static_cast<Opcode>(Deserialize_u8(message, offset));
 	switch (opcode)
 	{
+		case Opcode::S_PlayerList:
+		{
+			PlayerListPacket packet = PlayerListPacket::Deserialize(message, offset);
+
+			// On reconstruit la liste des joueurs
+			gameData.players.clear();
+			for (const auto& packetPlayer : packet.players)
+			{
+				PlayerData player;
+				player.name = packetPlayer.name;
+				if (packetPlayer.hasBrawler)
+					player.ownBrawlerId = packetPlayer.brawlerId;
+
+				gameData.players[packetPlayer.id] = player;
+			}
+			break;
+		}
+
 		case Opcode::S_CreateBrawler:
 		{
 			CreateBrawlerPacket packet = CreateBrawlerPacket::Deserialize(message, offset);
@@ -450,9 +528,26 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			Sel::Vector2f linearVelocity = packet.linearVelocity;
 			float scale = packet.scale;
 
+			std::string brawlerName;
+			auto playerDataIt = gameData.players.find(packet.playerId);
+			if (playerDataIt != gameData.players.end())
+			{
+				playerDataIt->second.ownBrawlerId = packet.brawlerId;
+				brawlerName = playerDataIt->second.name;
+			}
+
+			if (brawlerName.empty())
+				brawlerName = "Default Name";
+
+			
+
 			BrawlerClient brawler(*(gameData.registry), position, 0.f, scale, linearVelocity);
+			auto brawlerNameEntity = CreateDisplayText(gameData, *(gameData.renderer), brawlerName, 26, Sel::Color::White, "assets/fonts/Hey Comic.otf");
+
+			gameData.floatingEntitySystem->AddFloatingEntity(brawler.GetHandle().entity(), brawlerNameEntity.entity(), { 0.f, -40.f });
 
 			gameData.networkToEntities[packet.brawlerId] = brawler.GetHandle();
+
 
 			std::cout << "new Brawler" << std::endl;
 
@@ -558,6 +653,52 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			std::cout << "GameState: " << (int)(gameData.gameState) << " -> " << (int)(packet.newGameState) << std::endl;
 
 			gameData.gameState = static_cast<GameState>(packet.newGameState);
+			break;
+		}
+
+		case Opcode::S_UpdateLeaderboard:
+		{
+			// get camera
+			auto view = gameData.registry->view<Sel::CameraComponent, Sel::Transform>();
+			entt::entity cameraEntity;
+			if (view.begin() != view.end())
+				cameraEntity = view.front();
+			else
+				break; // no camera to anchor the leaderboard
+
+			// Delete all entities with LeaderBoardLine
+			auto leaderboardLineView = gameData.registry->view<LeaderBoardLine>();
+			for (auto entity : leaderboardLineView) {
+				gameData.registry->destroy(entity); // Delete entities with LeaderBoardLine flag
+			}
+
+			int fontSize = 24;
+			UpdateLeaderboardPacket packet = UpdateLeaderboardPacket::Deserialize(message, offset);
+
+			float displayOffset = 0.f;
+			float interlineOffset = 5.f;
+			int index = 0;
+			for (auto& onePlayer : packet.leaderboard)
+			{
+				std::string textToDisplay = onePlayer.playerName + " | " + std::to_string(onePlayer.playerScore);
+				Sel::Color textColor = onePlayer.isDead ? Sel::Color::Red : Sel::Color::White;
+				if (!onePlayer.isDead)
+				{
+					if (index < packet.leaderboard.size() - 1)
+						textColor = packet.leaderboard[index + 1].isDead ? Sel::Color::FromRGBA8(255, 165, 0, 255) : Sel::Color::White; // Je suis pas mort mais en danger si le suivant est mort | safe si le suivant est vivant
+					else
+						textColor = Sel::Color::FromRGBA8(255, 165, 0, 255); // Je suis le dernier du leaderboard et je suis encore en vie = danger
+				}
+
+				auto textEntityHandle = CreateDisplayText(gameData, *(gameData.renderer), textToDisplay, fontSize, textColor, "assets/fonts/Happy Selfie.otf", {0.f, 0.f});
+				gameData.registry->emplace<LeaderBoardLine>(textEntityHandle);
+
+				gameData.floatingEntitySystem->AddFloatingEntity(cameraEntity, textEntityHandle, { 0.f + SCREEN_MARGIN, displayOffset + SCREEN_MARGIN });
+
+				displayOffset += (float)fontSize + interlineOffset;
+				index++;
+			}
+
 			break;
 		}
 

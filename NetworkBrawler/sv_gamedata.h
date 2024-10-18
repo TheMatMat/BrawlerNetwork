@@ -37,8 +37,8 @@ struct GameData
 	float nextTick = 0.f;
 	float tickInterval = TickDelay;
 
-	float nextKill = 20.f;
-	float killInterval = 20.f;
+	float nextKill = 10.f;
+	float killInterval = 20000.f;
 
 
 	float lastCollectibleSpawn = 0.f;
