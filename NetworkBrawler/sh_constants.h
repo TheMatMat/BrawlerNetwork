@@ -32,6 +32,7 @@ enum class GameState : std::uint8_t
 
 enum class PlayerMode : std::uint8_t
 {
+	Pending,
 	Playing,
 	Dead,
 	Spectating

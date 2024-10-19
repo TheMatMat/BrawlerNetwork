@@ -74,6 +74,18 @@ int main()
 				{
 				case ENET_EVENT_TYPE_CONNECT:
 				{
+					if (gameData.players.empty()) {
+						// Reserve space for players (you could adjust this based on your needs)
+						gameData.players.reserve(25);
+					}
+
+					// If the players vector is already full, refuse the connection
+					if (gameData.players.size() >= gameData.players.capacity()) {
+						std::cout << "Connection refused: player limit reached" << std::endl;
+						enet_peer_disconnect_now(event.peer, 0); // Disconnect the peer immediately
+						break; // Exit the connection handling
+					}
+
 					// On enregistre le joueur en lui attribuant un id
 					// On cherche ici le premier ID libre
 					auto it = std::find_if(gameData.players.begin(), gameData.players.end(), [&](const Player& player) { return player.peer == nullptr; });
@@ -262,9 +274,22 @@ int main()
 
 								auto transform = gameData.registry.try_get<Sel::Transform>(entityIt->second);
 								if (transform)
-									transform->SetPosition({ -10000.f, -10000.f }); // On le place très loin
+									transform->SetPosition({ -20000.f, -20000.f }); // On le place très loin
 
 								update_leaderboard(gameData);
+
+								// On notifie tout les joueurs de cette mort
+								BrawlerDeathPacket packet;
+								packet.playerId = (*it)->index;
+								packet.brawlerId = (*it)->ownBrawlerNetworkId.value();
+
+								for (auto& player : gameData.playingPlayers)
+								{
+									if (!player->peer)
+										continue;
+
+									enet_peer_send(player->peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+								}
 							}
 
 							break;
@@ -326,12 +351,14 @@ ENetPacket* build_playerlist_packet(GameData& gameData)
 			{
 				packetPlayer.id = player.index;
 				packetPlayer.hasBrawler = true;
+				packetPlayer.isDead = player.isDead;
 				packetPlayer.brawlerId = player.ownBrawlerNetworkId.value();
 			}
 			else
 			{
 				packetPlayer.id = player.index;
 				packetPlayer.hasBrawler = false;
+				packetPlayer.isDead = player.isDead;
 				packetPlayer.brawlerId.reset();
 			}
 		}
@@ -370,6 +397,25 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 
 			// On créé toutes les entités de son côté
 			networkSystem.CreateAllEntities(player.peer);
+
+			// On lui envoie l'état du jeu et par conséquent son player mode
+			UpdateGameStatePacket gameStatePacket;
+			gameStatePacket.newGameState = static_cast<std::uint8_t>(gameData.gamesState);
+
+			UpdatePlayerModePacket playerModePacket;
+			if (gameData.gamesState == GameState::Lobby)
+			{
+				player.isDead = false;
+				playerModePacket.newPlayerMode = static_cast<std::uint8_t>(PlayerMode::Playing);
+			}
+			else
+			{
+				player.isDead = true;
+				playerModePacket.newPlayerMode = static_cast<std::uint8_t>(PlayerMode::Spectating);
+			}
+
+			enet_peer_send(player.peer, 0, build_packet(playerModePacket, ENET_PACKET_FLAG_RELIABLE));
+			//enet_peer_send(player.peer, 0, build_packet(gameStatePacket, ENET_PACKET_FLAG_RELIABLE));
 
 			break;
 		}
@@ -561,6 +607,9 @@ void start_game(GameData& gameData)
 		gameData.leaderBoard.push_back(&player);
 	}
 
+	gameData.killClock.Restart();
+	gameData.nextKill = gameData.killInterval;
+
 	update_leaderboard(gameData);
 }
 
@@ -608,14 +657,6 @@ void update_leaderboard(GameData& gameData)
 			}
 			return a->playerScore > b->playerScore; // Tri par score décroissant
 		});
-
-	// Affichage du leaderboard après le tri
-	/*std::cout << "Leaderboard after update:\n";
-	for (const auto& player : gameData.leaderBoard) {
-		std::cout << player->name << " - Score: " << (int)(player->playerScore)
-			<< (player->isDead ? " (Dead)\n" : " (Alive)\n");
-	}
-	std::cout << std::endl;*/
 
 	// On notifie tout le monde du changement de leadearboard
 	UpdateLeaderboardPacket packet;

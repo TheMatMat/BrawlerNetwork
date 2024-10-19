@@ -314,6 +314,7 @@ void PlayerListPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 	{
 		Serialize_u32(byteArray, player.id);
 		Serialize_str(byteArray, player.name);
+		Serialize_u8(byteArray, player.isDead);
 		Serialize_u8(byteArray, player.hasBrawler);
 		if (player.hasBrawler)
 			Serialize_u32(byteArray, player.brawlerId.value());
@@ -329,6 +330,7 @@ PlayerListPacket PlayerListPacket::Deserialize(const std::vector<std::uint8_t>& 
 	{
 		player.id = Deserialize_u32(byteArray, offset);
 		player.name = Deserialize_str(byteArray, offset);
+		player.isDead = Deserialize_u8(byteArray, offset);
 		player.hasBrawler = Deserialize_u8(byteArray, offset);
 		if (player.hasBrawler)
 			player.brawlerId = Deserialize_u32(byteArray, offset);
@@ -484,6 +486,36 @@ UpdateLeaderboardPacket UpdateLeaderboardPacket::Deserialize(const std::vector<s
 		data.playerScore = Deserialize_u32(byteArray, offset);
 		data.isDead =Deserialize_u8(byteArray, offset);
 	}
+
+	return packet;
+}
+
+void UpdatePlayerModePacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u8(byteArray, newPlayerMode);
+}
+
+UpdatePlayerModePacket UpdatePlayerModePacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	UpdatePlayerModePacket packet;
+
+	packet.newPlayerMode = Deserialize_u8(byteArray, offset);
+
+	return packet;
+}
+
+void BrawlerDeathPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u32(byteArray, playerId);
+	Serialize_u32(byteArray, brawlerId);
+}
+
+BrawlerDeathPacket BrawlerDeathPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	BrawlerDeathPacket packet;
+
+	packet.playerId = Deserialize_u32(byteArray, offset);
+	packet.brawlerId = Deserialize_u32(byteArray, offset);
 
 	return packet;
 }

@@ -44,6 +44,7 @@ struct PlayerData
 {
 	std::string name;
 	std::optional<std::uint32_t> ownBrawlerId;
+	bool isDead = true;
 };
 
 struct ClientNetworkId
@@ -61,11 +62,12 @@ struct GameData
 
 	GameState gameState;
 	PlayerMode playerMode;
-	std::uint8_t spectateIndex;
+	std::size_t spectateIndex = 0;
 	std::uint8_t playerScore; 
 
 	std::string name;
 	std::map<std::uint32_t, PlayerData> players;
+	std::map<std::uint32_t, PlayerData> spectatablePlayers;
 	ENetPeer* serverPeer; //< Le serveur
 	entt::registry* registry;
 	Sel::Renderer* renderer;
@@ -206,7 +208,9 @@ int main()
 	gameData.floatingEntitySystem = &floatingEntitySystem;
 
 	gameData.registry = &registry;
+
 	gameData.gameState = GameState::Lobby;
+	gameData.playerMode = PlayerMode::Pending;
 
 	Sel::ComponentRegistry componentRegistry;
 
@@ -239,10 +243,19 @@ int main()
 		Sel::InputManager::Instance().BindKeyPressed(SDLK_q, "MoveLeft");
 		Sel::InputManager::Instance().BindAction("MoveLeft", [&](bool pressed)
 		{
-			if (!pressed)
-				gameData.inputs.moveLeft = false;
-			else
-				gameData.inputs.moveLeft = true;
+			if (gameData.playerMode == PlayerMode::Playing)
+			{
+				gameData.inputs.moveLeft = pressed;
+			}
+			else if (gameData.playerMode == PlayerMode::Dead || gameData.playerMode == PlayerMode::Spectating)
+			{
+				if (pressed)
+				{
+					// Decrement spectateIndex and wrap it using modulo
+					if(gameData.spectatablePlayers.size() > 0)
+						gameData.spectateIndex = (gameData.spectateIndex + gameData.spectatablePlayers.size() - 1) % gameData.spectatablePlayers.size();
+				}
+			}
 
 			//std::cout << "move Left : " << (int)(gameData.inputs.moveLeft) << std::endl;
 		});
@@ -250,10 +263,19 @@ int main()
 		Sel::InputManager::Instance().BindKeyPressed(SDLK_d, "MoveRight");
 		Sel::InputManager::Instance().BindAction("MoveRight", [&](bool pressed)
 		{
-			if (!pressed)
-				gameData.inputs.moveRight = false;
-			else
-				gameData.inputs.moveRight = true;
+			if (gameData.playerMode == PlayerMode::Playing)
+			{
+				gameData.inputs.moveRight = pressed;
+			}
+			else if (gameData.playerMode == PlayerMode::Dead || gameData.playerMode == PlayerMode::Spectating)
+			{
+				if (pressed)
+				{
+					// Increment spectateIndex and wrap it using modulo
+					if(gameData.spectatablePlayers.size() >0)
+						gameData.spectateIndex = (gameData.spectateIndex + 1) % gameData.spectatablePlayers.size();
+				}
+			}
 
 			//std::cout << "move Left : " << (int)(gameData.inputs.moveRight) << std::endl;
 		});
@@ -261,10 +283,10 @@ int main()
 		Sel::InputManager::Instance().BindKeyPressed(SDLK_z, "MoveUp");
 		Sel::InputManager::Instance().BindAction("MoveUp", [&](bool pressed)
 		{
-			if (!pressed)
-				gameData.inputs.moveUp = false;
-			else
-				gameData.inputs.moveUp = true;
+			if (gameData.playerMode == PlayerMode::Playing)
+			{
+				gameData.inputs.moveUp = pressed;
+			}
 
 			//std::cout << "move Left : " << (int)(gameData.inputs.moveUp) << std::endl;
 		});
@@ -272,10 +294,10 @@ int main()
 		Sel::InputManager::Instance().BindKeyPressed(SDLK_s, "MoveDown");
 		Sel::InputManager::Instance().BindAction("MoveDown", [&](bool pressed)
 		{
-			if (!pressed)
-				gameData.inputs.moveDown = false;
-			else
-				gameData.inputs.moveDown = true;
+			if (gameData.playerMode == PlayerMode::Playing)
+			{
+				gameData.inputs.moveDown = pressed;
+			}
 
 			//std::cout << "move Left : " << (int)(gameData.inputs.moveDown) << std::endl;
 		});
@@ -301,15 +323,23 @@ int main()
 
 	entt::handle cameraEntity = CreateCamera(registry);
 
+	// On attend d'être initialisé (gameState et playerMode)
+	do 
+	{
+		run_network(host, gameData);
+	} while (gameData.playerMode == PlayerMode::Pending);
+
 	// Le client souhaite construire son brawler
-	if (gameData.gameState == GameState::Lobby)
+	// Il le fait s'il est en mode playing, sinon il spectate et créera son brawler à la prochaine lobby phase
+	if (gameData.playerMode	== PlayerMode::Playing)
 	{
 		CreateBrawlerResquest packet;
 		enet_peer_send(gameData.serverPeer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+		std::cout << "PLAYING MODE ACTIVATED" << std::endl;
 	}
 	else
 	{
-		gameData.playerMode = PlayerMode::Spectating;
+		std::cout << "SPECTATE MODE ACTIVATED" << std::endl;
 	}
 
 	Sel::Stopwatch clock;
@@ -396,6 +426,34 @@ int main()
 				auto& transformCamera = registry.get<Sel::Transform>(cameraEntity);
 				auto& transformEntity = registry.get<Sel::Transform>(it->second);
 				transformCamera.SetPosition(transformEntity.GetGlobalPosition() - Sel::Vector2f(WINDOW_WIDTH * 0.5f, WINDOW_LENGHT * 0.5f));
+			}
+		}
+		else if(gameData.spectatablePlayers.size() > 0)
+		{
+			// Clamp spectateIndex to the size of spectatablePlayers
+			if (gameData.spectateIndex >= gameData.spectatablePlayers.size())
+			{
+				gameData.spectateIndex = gameData.spectatablePlayers.size() - 1;
+			}
+
+			// Find the player in spectablePlayers
+			auto spectateIt = std::next(gameData.spectatablePlayers.begin(), gameData.spectateIndex);
+			if (spectateIt != gameData.spectatablePlayers.end())
+			{
+				const PlayerData& playerData = spectateIt->second;
+
+				// If the player has an ownBrawlerId, find the corresponding entity
+				if (playerData.ownBrawlerId.has_value())
+				{
+					auto entityIt = gameData.networkToEntities.find(playerData.ownBrawlerId.value());
+					if (entityIt != gameData.networkToEntities.end())
+					{
+						// Get the transform of the entity and make the camera follow it
+						auto& transformCamera = registry.get<Sel::Transform>(cameraEntity);
+						auto& transformEntity = registry.get<Sel::Transform>(entityIt->second);
+						transformCamera.SetPosition(transformEntity.GetGlobalPosition() - Sel::Vector2f(WINDOW_WIDTH * 0.5f, WINDOW_LENGHT * 0.5f));
+					}
+				}
 			}
 		}
 
@@ -513,6 +571,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			{
 				PlayerData player;
 				player.name = packetPlayer.name;
+				player.isDead = packetPlayer.isDead;
 				if (packetPlayer.hasBrawler)
 					player.ownBrawlerId = packetPlayer.brawlerId;
 
@@ -598,7 +657,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 
 				auto& transform = brawlerEntity.get<Sel::Transform>();
 				transform.SetPosition(state.position);
-
+				
 				auto& velocity = brawlerEntity.get<Sel::VelocityComponent>();
 				velocity.linearVel = state.linearVelocity;
 			}
@@ -640,10 +699,43 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 					{
 						CreateBrawlerResquest packet;
 						enet_peer_send(gameData.serverPeer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+						gameData.playerMode = PlayerMode::Playing;
+					}
+					else if (gameData.playerMode == PlayerMode::Dead)
+					{
+						gameData.playerMode = PlayerMode::Playing;
 					}
 					else
 					{
 						gameData.playerScore = 0;
+					}
+
+					// Clear UI
+					if (gameData.playerMode != PlayerMode::Pending)
+					{
+						// Delete all entities with LeaderBoardLine
+						auto leaderboardLineView = gameData.registry->view<LeaderBoardLine>();
+						for (auto entity : leaderboardLineView) {
+							gameData.registry->destroy(entity); // Delete entities with LeaderBoardLine flag
+						}
+					}
+
+					break;
+				}
+				case GameState::GameRunning:
+				{
+					if (gameData.playerMode == PlayerMode::Playing)
+					{
+						gameData.spectatablePlayers.clear();
+
+						// La game se lance, je met tous les joueurs présents à vivant
+						for (auto& player : gameData.players)
+							player.second.isDead = false;
+
+						// je les ajoute à la liste des spectables
+						gameData.spectatablePlayers = gameData.players;
+
+						break;
 					}
 
 					break;
@@ -653,6 +745,28 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			std::cout << "GameState: " << (int)(gameData.gameState) << " -> " << (int)(packet.newGameState) << std::endl;
 
 			gameData.gameState = static_cast<GameState>(packet.newGameState);
+			break;
+		}
+
+		case Opcode::S_UpdatePlayerMode:
+		{
+			UpdatePlayerModePacket packet = UpdatePlayerModePacket::Deserialize(message, offset);
+
+			gameData.playerMode = static_cast<PlayerMode>(packet.newPlayerMode);
+
+			if (gameData.playerMode == PlayerMode::Spectating || gameData.playerMode == PlayerMode::Dead)
+			{
+				for (auto& player : gameData.players)
+				{
+					if (!player.second.ownBrawlerId.has_value())
+						player.second.isDead = true;
+
+					if (!player.second.isDead && player.second.ownBrawlerId.has_value()) // Je recupère donc les joueurs pas morts et qui ont un brawler
+						gameData.spectatablePlayers[player.first] = player.second;
+				}
+				break;
+			}
+
 			break;
 		}
 
@@ -700,6 +814,27 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			}
 
 			break;
+		}
+
+		case Opcode::S_BrawlerDeath:
+		{
+			BrawlerDeathPacket packet = BrawlerDeathPacket::Deserialize(message, offset);
+
+			if (packet.brawlerId == gameData.ownBrawlerNetworkIndex)
+			{
+				std::cout << "Im Dead" << std::endl;
+				gameData.playerMode = PlayerMode::Dead;
+			}
+
+			// Mark the player as dead in gameData.players
+			auto it = gameData.players.find(packet.playerId);
+			if (it != gameData.players.end())
+				it->second.isDead = true;
+
+			// Remove the player from gameData.spectablePlayers if it exists
+			auto spectableIt = gameData.spectatablePlayers.find(packet.playerId);
+			if (spectableIt != gameData.spectatablePlayers.end())
+				gameData.spectatablePlayers.erase(spectableIt);
 		}
 
 		case Opcode::S_Winner:

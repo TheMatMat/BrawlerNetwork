@@ -31,8 +31,10 @@ enum class Opcode : std::uint8_t
 	S_DeleteBrawler,
 	S_UpdateSelfBrawlerId,
 	S_UpdateGameState,
+	S_UpdatePlayerMode,
 	S_CollectibleCollected,
 	S_UpdateLeaderboard,
+	S_BrawlerDeath,
 	S_Winner,
 };
 
@@ -114,6 +116,29 @@ struct UpdateGameStatePacket
 	static UpdateGameStatePacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
+// Le serveur indique un changement de mode de jeu au client (playing, dead, spectating)
+struct UpdatePlayerModePacket
+{
+	static constexpr Opcode opcode = Opcode::S_UpdatePlayerMode;
+
+	std::uint8_t newPlayerMode;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static UpdatePlayerModePacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
+// Le serveur indique la mort d'un brawler
+struct BrawlerDeathPacket
+{
+	static constexpr Opcode opcode = Opcode::S_BrawlerDeath;
+
+	std::uint32_t playerId;
+	std::uint32_t brawlerId;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static BrawlerDeathPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
 // Le serveur indique la création d'un brawler
 struct CreateBrawlerPacket
 {
@@ -178,6 +203,7 @@ struct PlayerListPacket
 	{
 		std::uint32_t id;
 		std::string name;
+		bool isDead;
 		bool hasBrawler;
 		std::optional<std::uint32_t> brawlerId;
 	};
