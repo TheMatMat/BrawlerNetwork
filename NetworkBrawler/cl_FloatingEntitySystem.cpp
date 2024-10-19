@@ -42,6 +42,9 @@ void FloatingEntitySystem::Update()
             m_registry->destroy(floatingEntity.floating);
             entitiesToRemove.push_back(i);
         }
+
+        if(!floatingTransform)
+            entitiesToRemove.push_back(i);
     }
 
     // Remove entries with no anchors

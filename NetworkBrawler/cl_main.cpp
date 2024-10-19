@@ -39,6 +39,7 @@
 #include "cl_brawler.h"
 #include "sv_networkedcomponent.h"
 #include "cl_FloatingEntitySystem.h"
+#include "cl_uiFlags.h"
 
 struct PlayerData
 {
@@ -63,7 +64,10 @@ struct GameData
 	GameState gameState;
 	PlayerMode playerMode;
 	std::size_t spectateIndex = 0;
+	std::size_t previousSpectateIndex = 1;
 	std::uint8_t playerScore; 
+
+	float nextKillTimer = 10.f;
 
 	std::string name;
 	std::map<std::uint32_t, PlayerData> players;
@@ -180,7 +184,7 @@ int main()
 
 	Sel::Core core;
 
-	Sel::Window window("Braaaaaawl", WINDOW_WIDTH, WINDOW_LENGHT);
+	Sel::Window window("Braaaaaawl", WINDOW_WIDTH, WINDOW_HEIGHT);
 	Sel::Renderer renderer(window, SDL_RENDERER_PRESENTVSYNC);
 	gameData.renderer = &renderer;
 
@@ -252,8 +256,11 @@ int main()
 				if (pressed)
 				{
 					// Decrement spectateIndex and wrap it using modulo
-					if(gameData.spectatablePlayers.size() > 0)
+					if (gameData.spectatablePlayers.size() > 0)
+					{
+						gameData.previousSpectateIndex = gameData.spectateIndex;
 						gameData.spectateIndex = (gameData.spectateIndex + gameData.spectatablePlayers.size() - 1) % gameData.spectatablePlayers.size();
+					}
 				}
 			}
 
@@ -272,8 +279,11 @@ int main()
 				if (pressed)
 				{
 					// Increment spectateIndex and wrap it using modulo
-					if(gameData.spectatablePlayers.size() >0)
+					if (gameData.spectatablePlayers.size() > 0)
+					{
+						gameData.previousSpectateIndex = gameData.spectateIndex;
 						gameData.spectateIndex = (gameData.spectateIndex + 1) % gameData.spectatablePlayers.size();
+					}
 				}
 			}
 
@@ -372,10 +382,132 @@ int main()
 		renderer.SetDrawColor(127, 0, 127, 255);
 		renderer.Clear();
 
-		/*brawler.ApplyInputs(gameData.inputs);*/
+		// =============== UI LOBBY ===============
+		auto uiGetReadyTextView = gameData.registry->view<UI_GetReadyText>();
+		auto uiIsReadyTextView = gameData.registry->view<UI_IsReadyText>();
+		if (gameData.gameState == GameState::Lobby && gameData.playerMode != PlayerMode::Dead && gameData.playerMode != PlayerMode::Spectating)
+		{
+			if (!gameData.isReady)
+			{
+				for (auto& entity : uiIsReadyTextView)
+					gameData.registry->destroy(entity);
 
-		//physicsSystem.Update(deltaTime);
-		//velocitySystem.Update(deltaTime);
+				if (uiGetReadyTextView.size() <= 0)
+				{
+					auto handle = CreateDisplayText(gameData, *(gameData.renderer), "Press SPACE to get ready", 34, Sel::Color::White, "assets/fonts/Happy Selfie.otf");
+					handle.emplace<UI_GetReadyText>();
+					floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
+				}
+			}
+			else
+			{
+				for (auto& entity : uiGetReadyTextView)
+					gameData.registry->destroy(entity);
+
+				if (uiIsReadyTextView.size() <= 0)
+				{
+					auto handle = CreateDisplayText(gameData, *(gameData.renderer), "You are ready! Waiting others...", 34, Sel::Color::FromRGBA8(0, 255, 0, 255), "assets/fonts/Happy Selfie.otf");
+					handle.emplace<UI_IsReadyText>();
+					floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
+				}
+			}
+		}
+		else
+		{
+			if (uiIsReadyTextView.size() > 0)
+			{
+				for (auto& entity : uiIsReadyTextView)
+					gameData.registry->destroy(entity);
+			}
+			if (uiGetReadyTextView.size() > 0)
+			{
+				for (auto& entity : uiGetReadyTextView)
+						gameData.registry->destroy(entity);
+			}
+		}
+		// =============== END UI LOBBY ===============
+
+
+
+		// =============== UI SPECTATE MODE ===============
+		auto uiSpectatingTextView = gameData.registry->view<UI_SpectatingText>();
+		if ((gameData.playerMode == PlayerMode::Dead || gameData.playerMode == PlayerMode::Spectating) && gameData.previousSpectateIndex != gameData.spectateIndex)
+		{
+			if (uiSpectatingTextView.size() > 0)
+			{
+				for (auto& entity : uiSpectatingTextView)
+					gameData.registry->destroy(entity);
+			}
+
+			std::string spectatedName = "someone";
+			auto it = gameData.spectatablePlayers.find(gameData.spectateIndex);
+			if (it != gameData.spectatablePlayers.end())
+				spectatedName = it->second.name;
+
+			auto handle = CreateDisplayText(gameData, *(gameData.renderer), "<<(Q)<< Specating " + spectatedName + " >>(D)>>", 34, Sel::Color::White, "assets/fonts/Happy Selfie.otf");
+			handle.emplace<UI_SpectatingText>();
+			floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
+		}
+		else
+		{
+			if (uiSpectatingTextView.size() > 0)
+			{
+				for (auto& entity : uiSpectatingTextView)
+					gameData.registry->destroy(entity);
+			}
+		}
+		// =============== END UI SPECTATE MODE ===============
+		
+
+		// =============== UI IN GAME RUNNING ===============
+		auto uiKillTimerText = gameData.registry->view<UI_NextKillTimerText>();
+		auto uiKillTimerValue = gameData.registry->view<UI_NextKillTimerValue>();
+		if (gameData.gameState == GameState::GameRunning)
+		{
+			gameData.nextKillTimer -= deltaTime;
+			if (gameData.nextKillTimer <= 0)
+				gameData.nextKillTimer = 10.f;
+
+			if (uiKillTimerText.size() <= 0)
+			{
+				auto handle = CreateDisplayText(gameData, *(gameData.renderer), "Next kill in:", 20, Sel::Color::White, "assets/fonts/Happy Selfie.otf");
+				handle.emplace<UI_NextKillTimerText>();
+				floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.9f, WINDOW_HEIGHT * 0.25f });
+			}
+
+			if (uiKillTimerValue.size() > 0)
+			{
+				for (auto& entity : uiKillTimerValue)
+					gameData.registry->destroy(entity);
+			}
+
+			Sel::Color textColor = Sel::Color::White;
+			if (gameData.nextKillTimer <= 6.0f)
+				textColor = Sel::Color::Red;
+
+			int killTimerInt = static_cast<int>(gameData.nextKillTimer);
+			std::string killTimerStr = (killTimerInt < 1) ? "0" : std::to_string(killTimerInt);
+
+			auto handle = CreateDisplayText(gameData, *(gameData.renderer), killTimerStr, 30, textColor, "assets/fonts/Hey Comic.otf");
+			handle.emplace<UI_NextKillTimerValue>();
+			floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.9f, WINDOW_HEIGHT * 0.25f + 20.f });
+		}
+		else
+		{
+			if (uiKillTimerText.size() > 0)
+			{
+				for (auto& entity : uiKillTimerText)
+					gameData.registry->destroy(entity);
+			}
+
+			if (uiKillTimerValue.size() > 0)
+			{
+				for (auto& entity : uiKillTimerValue)
+					gameData.registry->destroy(entity);
+			}
+		}
+		
+		// =============== END UI IN GAME RUNNING ===============
 
 		auto viewBrawler = gameData.registry->view<BrawlerFlag, Sel::VelocityComponent, Sel::Transform, Sel::SpritesheetComponent>();
 		for (auto&& [entity, flag, velocity, transform, spritesheetComp] : viewBrawler.each())
@@ -425,7 +557,7 @@ int main()
 			{
 				auto& transformCamera = registry.get<Sel::Transform>(cameraEntity);
 				auto& transformEntity = registry.get<Sel::Transform>(it->second);
-				transformCamera.SetPosition(transformEntity.GetGlobalPosition() - Sel::Vector2f(WINDOW_WIDTH * 0.5f, WINDOW_LENGHT * 0.5f));
+				transformCamera.SetPosition(transformEntity.GetGlobalPosition() - Sel::Vector2f(WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT * 0.5f));
 			}
 		}
 		else if(gameData.spectatablePlayers.size() > 0)
@@ -451,7 +583,7 @@ int main()
 						// Get the transform of the entity and make the camera follow it
 						auto& transformCamera = registry.get<Sel::Transform>(cameraEntity);
 						auto& transformEntity = registry.get<Sel::Transform>(entityIt->second);
-						transformCamera.SetPosition(transformEntity.GetGlobalPosition() - Sel::Vector2f(WINDOW_WIDTH * 0.5f, WINDOW_LENGHT * 0.5f));
+						transformCamera.SetPosition(transformEntity.GetGlobalPosition() - Sel::Vector2f(WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT * 0.5f));
 					}
 				}
 			}
@@ -608,7 +740,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			gameData.networkToEntities[packet.brawlerId] = brawler.GetHandle();
 
 
-			std::cout << "new Brawler" << std::endl;
+			/*std::cout << "new Brawler" << std::endl;*/
 
 			break;
 		}
@@ -619,7 +751,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 
 			SpawnCollectible(gameData, packet);
 
-			std::cout << "new Collectible" << std::endl;
+			/*std::cout << "new Collectible" << std::endl;*/
 
 			break;
 		}

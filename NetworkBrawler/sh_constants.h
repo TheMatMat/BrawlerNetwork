@@ -9,7 +9,7 @@
 const std::uint16_t AppPort = 14769;
 
 const int WINDOW_WIDTH = 850;
-const int WINDOW_LENGHT = 520;
+const int WINDOW_HEIGHT = 520;
 
 const float SCREEN_MARGIN = 10.f;
 

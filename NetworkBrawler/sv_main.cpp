@@ -243,7 +243,7 @@ int main()
 						if (now >= gameData.nextCollectibleSpawn)
 						{
 							spawn_collectible(gameData);
-							std::cout << "Spawn Collectible now - " << collectibleCount + 1 << std::endl;
+							/*std::cout << "Spawn Collectible now - " << collectibleCount + 1 << std::endl;*/
 							gameData.nextCollectibleSpawn = now + gameData.collectibleSpawnInterval;  // Prochain spawn X seconds apres mtnt
 						}
 					}
