@@ -508,6 +508,9 @@ void BrawlerDeathPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 {
 	Serialize_u32(byteArray, playerId);
 	Serialize_u32(byteArray, brawlerId);
+	Serialize_f32(byteArray, deathPosition.x);
+	Serialize_f32(byteArray, deathPosition.y);
+	Serialize_i8(byteArray, deathScaleX);
 }
 
 BrawlerDeathPacket BrawlerDeathPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
@@ -516,6 +519,12 @@ BrawlerDeathPacket BrawlerDeathPacket::Deserialize(const std::vector<std::uint8_
 
 	packet.playerId = Deserialize_u32(byteArray, offset);
 	packet.brawlerId = Deserialize_u32(byteArray, offset);
+
+	float deathX = Deserialize_f32(byteArray, offset);
+	float deathY = Deserialize_f32(byteArray, offset);
+	packet.deathPosition = { deathX, deathY };
+
+	packet.deathScaleX = Deserialize_i8(byteArray, offset);
 
 	return packet;
 }

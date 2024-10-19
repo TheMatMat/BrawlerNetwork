@@ -18,6 +18,9 @@ public:
     BrawlerClient(entt::registry& registry, const Sel::Vector2f& position, float rotation, float scale, const Sel::Vector2f& linearVelocity);
     ~BrawlerClient() = default;
 
+    static entt::entity BuildTemp(entt::registry& registry, Sel::Vector2f position, bool bFlip = false);
+
 protected:
-    Sel::Sprite BuildSprite(float size, Sel::ResourceManager& resourceManager);
+   Sel::Sprite BuildSprite(float size, Sel::ResourceManager& resourceManager);
+   static Sel::Sprite BuildSpriteStatic(float size, Sel::ResourceManager& resourceManager);
 };

@@ -272,9 +272,15 @@ int main()
 								// Add DeadFlag to the entity
 								gameData.registry.emplace_or_replace<DeadFlag>(entityIt->second);
 
+								Sel::Vector2f deathPosition;
+								std::int8_t deathScaleX = 1.f;
 								auto transform = gameData.registry.try_get<Sel::Transform>(entityIt->second);
 								if (transform)
+								{
+									deathPosition = transform->GetGlobalPosition();
+									deathScaleX = transform->GetScale().x;
 									transform->SetPosition({ -20000.f, -20000.f }); // On le place très loin
+								}
 
 								update_leaderboard(gameData);
 
@@ -282,6 +288,8 @@ int main()
 								BrawlerDeathPacket packet;
 								packet.playerId = (*it)->index;
 								packet.brawlerId = (*it)->ownBrawlerNetworkId.value();
+								packet.deathPosition = deathPosition;
+								packet.deathScaleX = deathScaleX;
 
 								for (auto& player : gameData.playingPlayers)
 								{

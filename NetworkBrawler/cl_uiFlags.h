@@ -5,3 +5,4 @@ struct UI_IsReadyText{};
 struct UI_SpectatingText{};
 struct UI_NextKillTimerText{};
 struct UI_NextKillTimerValue{};
+struct UI_EndScreenText{};

@@ -134,6 +134,8 @@ struct BrawlerDeathPacket
 
 	std::uint32_t playerId;
 	std::uint32_t brawlerId;
+	Sel::Vector2f deathPosition;
+	std::int8_t deathScaleX;
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static BrawlerDeathPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);

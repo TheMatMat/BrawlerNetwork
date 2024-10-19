@@ -40,6 +40,7 @@
 #include "sv_networkedcomponent.h"
 #include "cl_FloatingEntitySystem.h"
 #include "cl_uiFlags.h"
+#include "sh_temporaryEntitySystem.h"
 
 struct PlayerData
 {
@@ -76,6 +77,7 @@ struct GameData
 	entt::registry* registry;
 	Sel::Renderer* renderer;
 	FloatingEntitySystem* floatingEntitySystem;
+	TemporaryEntitySystem* temporaryEntitySystem;
 	std::unordered_map<std::uint32_t /*networkId*/, entt::handle> networkToEntities; //< toutes les entités (ici tous les brawlers)
 	PlayerInputs inputs; //< Les inputs du joueur
 	std::size_t ownPlayerIndex; //< Notre propre ID
@@ -210,6 +212,9 @@ int main()
 
 	FloatingEntitySystem floatingEntitySystem(&registry);
 	gameData.floatingEntitySystem = &floatingEntitySystem;
+
+	TemporaryEntitySystem temporaryEntitySystem(registry);
+	gameData.temporaryEntitySystem = &temporaryEntitySystem;
 
 	gameData.registry = &registry;
 
@@ -431,7 +436,7 @@ int main()
 
 		// =============== UI SPECTATE MODE ===============
 		auto uiSpectatingTextView = gameData.registry->view<UI_SpectatingText>();
-		if ((gameData.playerMode == PlayerMode::Dead || gameData.playerMode == PlayerMode::Spectating) && gameData.previousSpectateIndex != gameData.spectateIndex)
+		if ((gameData.playerMode == PlayerMode::Dead || gameData.playerMode == PlayerMode::Spectating) && gameData.gameState == GameState::GameRunning && gameData.previousSpectateIndex != gameData.spectateIndex)
 		{
 			if (uiSpectatingTextView.size() > 0)
 			{
@@ -506,8 +511,25 @@ int main()
 					gameData.registry->destroy(entity);
 			}
 		}
-		
 		// =============== END UI IN GAME RUNNING ===============
+
+		// =============== UI END SCREEN ===============
+		auto uiSEndScreenTextView = gameData.registry->view<UI_EndScreenText>();
+		if (gameData.gameState == GameState::EndScreen && uiSEndScreenTextView.size() <= 0)
+		{
+			auto handle = CreateDisplayText(gameData, *(gameData.renderer), "Press SPACE to return to lobby", 34, Sel::Color::White, "assets/fonts/Happy Selfie.otf");
+			handle.emplace<UI_SpectatingText>();
+			floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
+		}
+		else
+		{
+			if (uiSEndScreenTextView.size() > 0)
+			{
+				for (auto& entity : uiSEndScreenTextView)
+					gameData.registry->destroy(entity);
+			}
+		}
+		// =============== END END SCREEN ===============
 
 		auto viewBrawler = gameData.registry->view<BrawlerFlag, Sel::VelocityComponent, Sel::Transform, Sel::SpritesheetComponent>();
 		for (auto&& [entity, flag, velocity, transform, spritesheetComp] : viewBrawler.each())
@@ -532,8 +554,9 @@ int main()
 		}
 
 		floatingEntitySystem.Update();
-		renderSystem.Update(deltaTime);
+		temporaryEntitySystem.Update(deltaTime);
 		animationSystem.Update(deltaTime);
+		renderSystem.Update(deltaTime);
 
 		if (ImGui::Begin("Menu"))
 		{
@@ -957,6 +980,16 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 				std::cout << "Im Dead" << std::endl;
 				gameData.playerMode = PlayerMode::Dead;
 			}
+
+			bool bFlip = true;
+			auto brawlerIt = gameData.networkToEntities.find(packet.brawlerId);
+			if (brawlerIt != gameData.networkToEntities.end())
+			{
+				bFlip = brawlerIt->second.try_get<Sel::Transform>()->GetScale().x > 0 ? false : true;
+			}
+
+			// Spawn temp entity for death anim
+			BrawlerClient::BuildTemp(*(gameData.registry), packet.deathPosition, bFlip);
 
 			// Mark the player as dead in gameData.players
 			auto it = gameData.players.find(packet.playerId);
