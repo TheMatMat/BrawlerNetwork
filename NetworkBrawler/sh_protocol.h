@@ -76,6 +76,7 @@ struct BrawlerData
 	static BrawlerData Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
+
 // Un joueur souhaite créer un Brawler
 struct CreateBrawlerResquest
 {

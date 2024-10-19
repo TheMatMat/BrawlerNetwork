@@ -70,6 +70,9 @@ struct GameData
 
 	float nextKillTimer = 10.f;
 
+	float waitBeforeSpectate = 1.5f;
+	Sel::Stopwatch beforeSpectateClock;
+
 	std::string name;
 	std::map<std::uint32_t, PlayerData> players;
 	std::map<std::uint32_t, PlayerData> spectatablePlayers;
@@ -320,7 +323,7 @@ int main()
 		Sel::InputManager::Instance().BindKeyPressed(SDLK_SPACE, "Ready");
 		Sel::InputManager::Instance().BindAction("Ready", [&](bool pressed)
 			{
-				if (gameData.gameState == GameState::Lobby || gameData.gameState == GameState::EndScreen)
+				if ((gameData.playerMode == PlayerMode::Playing || gameData.playerMode == PlayerMode::Dead) && (gameData.gameState == GameState::Lobby || gameData.gameState == GameState::EndScreen))
 				{
 					if (!pressed)
 						return;
@@ -436,7 +439,7 @@ int main()
 
 		// =============== UI SPECTATE MODE ===============
 		auto uiSpectatingTextView = gameData.registry->view<UI_SpectatingText>();
-		if ((gameData.playerMode == PlayerMode::Dead || gameData.playerMode == PlayerMode::Spectating) && gameData.gameState == GameState::GameRunning && gameData.previousSpectateIndex != gameData.spectateIndex)
+		if (((gameData.playerMode == PlayerMode::Dead && gameData.gameState == GameState::GameRunning) || gameData.playerMode == PlayerMode::Spectating) && gameData.previousSpectateIndex != gameData.spectateIndex)
 		{
 			if (uiSpectatingTextView.size() > 0)
 			{
@@ -445,9 +448,11 @@ int main()
 			}
 
 			std::string spectatedName = "someone";
-			auto it = gameData.spectatablePlayers.find(gameData.spectateIndex);
-			if (it != gameData.spectatablePlayers.end())
-				spectatedName = it->second.name;
+			auto spectateIt = std::next(gameData.spectatablePlayers.begin(), gameData.spectateIndex);
+			if (spectateIt != gameData.spectatablePlayers.end())
+			{
+				spectatedName = spectateIt->second.name;
+			}
 
 			auto handle = CreateDisplayText(gameData, *(gameData.renderer), "<<(Q)<< Specating " + spectatedName + " >>(D)>>", 34, Sel::Color::White, "assets/fonts/Happy Selfie.otf");
 			handle.emplace<UI_SpectatingText>();
@@ -585,28 +590,31 @@ int main()
 		}
 		else if(gameData.spectatablePlayers.size() > 0)
 		{
-			// Clamp spectateIndex to the size of spectatablePlayers
-			if (gameData.spectateIndex >= gameData.spectatablePlayers.size())
+			if (gameData.beforeSpectateClock.GetElapsedTime() >= gameData.waitBeforeSpectate)
 			{
-				gameData.spectateIndex = gameData.spectatablePlayers.size() - 1;
-			}
-
-			// Find the player in spectablePlayers
-			auto spectateIt = std::next(gameData.spectatablePlayers.begin(), gameData.spectateIndex);
-			if (spectateIt != gameData.spectatablePlayers.end())
-			{
-				const PlayerData& playerData = spectateIt->second;
-
-				// If the player has an ownBrawlerId, find the corresponding entity
-				if (playerData.ownBrawlerId.has_value())
+				// Clamp spectateIndex to the size of spectatablePlayers
+				if (gameData.spectateIndex >= gameData.spectatablePlayers.size())
 				{
-					auto entityIt = gameData.networkToEntities.find(playerData.ownBrawlerId.value());
-					if (entityIt != gameData.networkToEntities.end())
+					gameData.spectateIndex = gameData.spectatablePlayers.size() - 1;
+				}
+
+				// Find the player in spectablePlayers
+				auto spectateIt = std::next(gameData.spectatablePlayers.begin(), gameData.spectateIndex);
+				if (spectateIt != gameData.spectatablePlayers.end())
+				{
+					const PlayerData& playerData = spectateIt->second;
+
+					// If the player has an ownBrawlerId, find the corresponding entity
+					if (playerData.ownBrawlerId.has_value())
 					{
-						// Get the transform of the entity and make the camera follow it
-						auto& transformCamera = registry.get<Sel::Transform>(cameraEntity);
-						auto& transformEntity = registry.get<Sel::Transform>(entityIt->second);
-						transformCamera.SetPosition(transformEntity.GetGlobalPosition() - Sel::Vector2f(WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT * 0.5f));
+						auto entityIt = gameData.networkToEntities.find(playerData.ownBrawlerId.value());
+						if (entityIt != gameData.networkToEntities.end())
+						{
+							// Get the transform of the entity and make the camera follow it
+							auto& transformCamera = registry.get<Sel::Transform>(cameraEntity);
+							auto& transformEntity = registry.get<Sel::Transform>(entityIt->second);
+							transformCamera.SetPosition(transformEntity.GetGlobalPosition() - Sel::Vector2f(WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT * 0.5f));
+						}
 					}
 				}
 			}
@@ -720,8 +728,9 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 		{
 			PlayerListPacket packet = PlayerListPacket::Deserialize(message, offset);
 
-			// On reconstruit la liste des joueurs
-			gameData.players.clear();
+			// Create a temporary map for the new player list from the packet
+			std::map<std::uint32_t, PlayerData> newPlayers;
+
 			for (const auto& packetPlayer : packet.players)
 			{
 				PlayerData player;
@@ -730,8 +739,22 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 				if (packetPlayer.hasBrawler)
 					player.ownBrawlerId = packetPlayer.brawlerId;
 
-				gameData.players[packetPlayer.id] = player;
+				newPlayers[packetPlayer.id] = player;
 			}
+
+			// Compare and track disconnected players
+			for (const auto& [playerId, playerData] : gameData.players)
+			{
+				if (newPlayers.find(playerId) == newPlayers.end())
+				{
+					// Player is not in the new list (disconnected), remove from spectatablePlayers
+					gameData.spectatablePlayers.erase(playerId);
+					gameData.previousSpectateIndex = 50; // random number above player limits to trigger UI change
+				}
+			}
+
+			gameData.players = std::move(newPlayers);
+
 			break;
 		}
 
@@ -979,6 +1002,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			{
 				std::cout << "Im Dead" << std::endl;
 				gameData.playerMode = PlayerMode::Dead;
+				gameData.beforeSpectateClock.Restart();
 			}
 
 			bool bFlip = true;
