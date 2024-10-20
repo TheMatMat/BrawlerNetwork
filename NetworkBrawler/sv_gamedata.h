@@ -1,3 +1,4 @@
+#pragma once
 
 #include "sh_constants.h"
 #include <Sel/Color.hpp>
@@ -22,10 +23,24 @@ struct Player
 	bool isDead;
 };
 
+struct GoldenCarrot
+{
+	bool isSpawned = false;
+	std::optional<std::uint32_t> owningBrawlerId;
+	entt::handle handle;
+
+	Sel::Stopwatch goldenCarrotClock;
+	float spawnTime = 0.f;
+
+	Sel::Stopwatch pointPulseClock; // < the golden carrot give 1 more points every 2 seconds to its owner
+	float pulseTime = 3.f;
+};
+
 struct GameData
 {
-	GameData(entt::registry& reg) :
-		registry(reg)
+	GameData(entt::registry& reg, GoldenCarrot& _goldenCarrot) :
+		registry(reg),
+		goldenCarrot(_goldenCarrot)
 	{
 	}
 
@@ -37,8 +52,10 @@ struct GameData
 	float nextTick = 0.f;
 	float tickInterval = TickDelay;
 
-	float nextKill = 20.f;
-	float killInterval = 20.f;
+	float nextKill = 1000.f;
+	float killInterval = 1000.f;
+
+	GoldenCarrot& goldenCarrot;
 
 
 	float lastCollectibleSpawn = 0.f;

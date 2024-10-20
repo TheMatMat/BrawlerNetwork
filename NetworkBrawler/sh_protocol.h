@@ -48,6 +48,8 @@ struct CollectibleFlag
 	CollectibleType type;
 };
 
+struct GoldenCarrotFlag {};
+
 struct DeadFlag
 {
 

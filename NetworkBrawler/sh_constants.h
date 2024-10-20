@@ -20,7 +20,8 @@ const float WORLD_MAX_Y = 500.f;
 
 enum class CollectibleType : std::uint8_t
 {
-	Fire,
+	Carrot,
+	GoldenCarrot,
 };
 
 enum class GameState : std::uint8_t

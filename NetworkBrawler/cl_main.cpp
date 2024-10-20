@@ -98,7 +98,7 @@ bool run_network(ENetHost* host, GameData& gameData);
 void tick(GameData& gameData);
 
 entt::handle CreateCamera(entt::registry& registry);
-Sel::Sprite BuildCollectibleSprite(float size);
+Sel::Sprite BuildCollectibleSprite(float size, const CollectibleType& type);
 entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket& packet);
 entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std::string text, int fontSize, const Sel::Color& textColor, const std::string& fontPath, Sel::Vector2f origin = {0.5f, 0.5f}, bool isUI = true);
 
@@ -681,16 +681,32 @@ entt::handle CreateCamera(entt::registry& registry)
 }
 
 
-Sel::Sprite BuildCollectibleSprite(float size)
+Sel::Sprite BuildCollectibleSprite(float size, const CollectibleType& type)
 {
 	Sel::ResourceManager& resourceManager = Sel::ResourceManager::Instance();
-	Sel::Sprite collectibleSprite(resourceManager.GetTexture("assets/ball.png"));
+	switch (type)
+	{
+		case CollectibleType::Carrot:
+		{
+			Sel::Sprite collectibleSprite(resourceManager.GetTexture("assets/ball.png"));
 
-	collectibleSprite.Resize(size, size);
-	collectibleSprite.SetOrigin({ 0.5f, 0.5f });
-	collectibleSprite.SetColor(Sel::Color(128.f, 0, 0));
+			collectibleSprite.Resize(size, size);
+			collectibleSprite.SetOrigin({ 0.5f, 0.5f });
+			collectibleSprite.SetColor(Sel::Color(128.f, 0, 0));
 
-	return collectibleSprite;
+			return collectibleSprite;
+		}
+		case CollectibleType::GoldenCarrot:
+		{
+			Sel::Sprite collectibleSprite(resourceManager.GetTexture("assets/ball.png"));
+
+			collectibleSprite.Resize(size * 2, size * 2);
+			collectibleSprite.SetOrigin({ 0.5f, 0.5f });
+			collectibleSprite.SetColor(Sel::Color(0, 128.f, 0));
+
+			return collectibleSprite;
+		}
+	}
 }
 
 entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket& packet)
@@ -704,11 +720,13 @@ entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket&
 	transform.SetScale({ packet.scale, packet.scale });
 
 	auto& collectibleType = gameData.registry->emplace<CollectibleFlag>(newCollectible);
-	collectibleType.type = CollectibleType::Fire;
+	collectibleType.type = packet.type;
+
+	gameData.registry->emplace<GoldenCarrotFlag>(newCollectible);
 
 	// Add graphics component
 	auto& gfxComponent = gameData.registry->emplace<Sel::GraphicsComponent>(newCollectible);
-	gfxComponent.renderable = std::make_shared<Sel::Sprite>(BuildCollectibleSprite(75.f));
+	gfxComponent.renderable = std::make_shared<Sel::Sprite>(BuildCollectibleSprite(75.f, packet.type));
 
 	// On crée un handle
 	entt::handle handle = entt::handle(*(gameData.registry), newCollectible);
@@ -830,7 +848,11 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 
 			SpawnCollectible(gameData, packet);
 
-			/*std::cout << "new Collectible" << std::endl;*/
+			if(packet.type == CollectibleType::GoldenCarrot)
+				std::cout << "new GoldenCarrot" << std::endl;
+			else
+				std::cout << "new Collectible" << std::endl;
+
 
 			break;
 		}
@@ -869,8 +891,9 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 				auto& transform = brawlerEntity.get<Sel::Transform>();
 				transform.SetPosition(state.position);
 				
-				auto& velocity = brawlerEntity.get<Sel::VelocityComponent>();
-				velocity.linearVel = state.linearVelocity;
+				auto velocity = brawlerEntity.try_get<Sel::VelocityComponent>();
+				if(velocity)
+					velocity->linearVel = state.linearVelocity;
 			}
 
 			gameData.snapshots.push_back(std::move(packet));

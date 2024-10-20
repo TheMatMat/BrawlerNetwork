@@ -21,7 +21,7 @@ ENetPacket* build_playerlist_packet(GameData& gameData);
 
 void handle_message(Player& player, const std::vector<std::uint8_t>& message, GameData& gameData, NetworkSystem& networkSystem);
 void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, Sel::VelocitySystem& velocitySystem, NetworkSystem& networkSystem, CollectibleSystem& collectibleSystem);
-entt::handle spawn_collectible(GameData& gameData);
+entt::handle spawn_collectible(GameData& gameData, const CollectibleType& type = CollectibleType::Carrot);
 void start_game(GameData& gameData);
 void end_game(GameData& gameData);
 void update_leaderboard(GameData& gameData);
@@ -47,7 +47,8 @@ int main()
 	}
 
 	entt::registry registry;
-	GameData gameData(registry);
+	GoldenCarrot goldenCarrot;
+	GameData gameData(registry, goldenCarrot);
 
 	Sel::PhysicsSystem physicsSystem(registry);
 	Sel::VelocitySystem velocitySystem(registry);
@@ -235,6 +236,35 @@ int main()
 				}
 				else
 				{
+					// Spawn de la carotte legendaire
+					if (brawlerCount > 0 && gameData.goldenCarrot.goldenCarrotClock.GetElapsedTime() >= gameData.goldenCarrot.spawnTime && !gameData.goldenCarrot.isSpawned)
+					{
+						gameData.goldenCarrot.handle = spawn_collectible(gameData, CollectibleType::GoldenCarrot);
+						gameData.goldenCarrot.isSpawned = true;
+					}
+
+					// Add point to the brawler owning the golden carrot
+					if (
+						brawlerCount > 0
+						&& gameData.goldenCarrot.isSpawned
+						&& gameData.goldenCarrot.owningBrawlerId.has_value()
+						&& gameData.goldenCarrot.pointPulseClock.GetElapsedTime() >= gameData.goldenCarrot.pulseTime
+						)
+					{
+						// Find the player controlling the brawler and send him a packet to notify he got a collectible
+						auto it = std::find_if(gameData.players.begin(), gameData.players.end(), [&](const Player& player) { return player.ownBrawlerNetworkId == gameData.goldenCarrot.owningBrawlerId; });
+						if (it != gameData.players.end());
+						{
+							Player& player = *it;
+
+							// Update its score
+							player.playerScore++;
+						}
+						gameData.goldenCarrot.pointPulseClock.Restart();
+
+						update_leaderboard(gameData);
+					}
+
 					std::size_t collectibleCount = gameData.registry.view<CollectibleFlag>().size();
 
 					// On check s'il y a au moins un brawler et si le nombre de collectibles est inferieur au maximum autorise
@@ -305,6 +335,8 @@ int main()
 
 						gameData.nextKill = nowKill + gameData.killInterval;
 					}
+
+
 				}
 
 
@@ -566,7 +598,7 @@ void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, Sel::VelocitySy
 	}
 }
 
-entt::handle spawn_collectible(GameData& gameData)
+entt::handle spawn_collectible(GameData& gameData, const CollectibleType& type)
 {
 	entt::entity newCollectible = gameData.registry.create();
 
@@ -580,14 +612,30 @@ entt::handle spawn_collectible(GameData& gameData)
 	float spawnY = disY(gen);
 
 	auto& transform = gameData.registry.emplace<Sel::Transform>(newCollectible);
-	transform.SetPosition({ spawnX, spawnY });
+	if(type == CollectibleType::GoldenCarrot)
+		transform.SetPosition({ 0.f, 0.f });
+	else
+		transform.SetPosition({ spawnX, spawnY });
 	transform.SetRotation(0.f);
 	transform.SetScale({ 0.5f, 0.5f });
 
+	// The server synchronize position of the entity with velocity component. 
+	// Sometimes the golden carrot is moved in/out the game space when it's catch/released instead of instantiate/destroyed
+	// So I add it that velocity component even if it is not really moving so that in/out get sync on client 
+	// That might be not clean
+	if (type == CollectibleType::GoldenCarrot) 
+	{
+		auto& velocity = gameData.registry.emplace<Sel::VelocityComponent>(newCollectible);
+		velocity.linearVel = { 0.f, 0.f };
+	}
+
 	auto& network = gameData.registry.emplace<NetworkedComponent>(newCollectible);
 
-	auto& collectibleType = gameData.registry.emplace<CollectibleFlag>(newCollectible);
-	collectibleType.type = CollectibleType::Fire;
+	auto& collectibleFlag = gameData.registry.emplace<CollectibleFlag>(newCollectible);
+	collectibleFlag.type = type;
+
+	if(type == CollectibleType::GoldenCarrot)
+		gameData.registry.emplace<GoldenCarrotFlag>(newCollectible);
 
 	// On crée un handle
 	entt::handle handle = entt::handle(gameData.registry, newCollectible);
@@ -614,6 +662,12 @@ void start_game(GameData& gameData)
 		gameData.playingPlayers.push_back(&player);
 		gameData.leaderBoard.push_back(&player);
 	}
+
+	// float goldenCarrotSpawnTime = static_cast<int>(gameData.playingPlayers.size() * 0.5f) * gameData.killInterval + 4.0f;
+	float goldenCarrotSpawnTime = 5.f;
+
+	gameData.goldenCarrot.goldenCarrotClock.Restart();
+	gameData.goldenCarrot.spawnTime = goldenCarrotSpawnTime;
 
 	gameData.killClock.Restart();
 	gameData.nextKill = gameData.killInterval;

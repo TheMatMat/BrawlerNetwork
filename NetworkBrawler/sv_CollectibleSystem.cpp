@@ -25,6 +25,7 @@ bool CollectibleSystem::Update()
         // Get components for each collectible
         auto& collectibleTransform = collectibleView.get<Sel::Transform>(collectible);
         auto& collectibleNetwork = collectibleView.get<NetworkedComponent>(collectible);
+        auto& collectibleFlag = collectibleView.get<CollectibleFlag>(collectible);
 
         // Loop through all brawlers
         for (auto brawler : brawlerView)
@@ -40,11 +41,28 @@ bool CollectibleSystem::Update()
             if (distanceSqr <= 50.f * 50.f)
             {
                 // They are in contact
-                //std::cout << "Brawler and Collectible are in contact!\n";
 
-                // Remove the collectible from the registry
-                m_registry.destroy(collectible);
+                if (collectibleFlag.type == CollectibleType::GoldenCarrot)
+                {
+                    std::cout << "golden gathered" << std::endl;
+
+                    m_gameData.goldenCarrot.owningBrawlerId = brawlerNetwork.networkId;
+                    m_gameData.goldenCarrot.pointPulseClock.Restart();
+
+                    // Notify people
+
+                    //Move it out the game space
+                    collectibleTransform.SetPosition({ -20000.f, -20000.f });
+                }
+                else
+                {
+                    // Remove the collectible from the registry
+                    m_registry.destroy(collectible);
+
+                }
+
                 collectionOccured = true;
+
 
                 // Find the player controlling the brawler and send him a packet to notify he got a collectible
                 auto it = std::find_if(m_gameData.players.begin(), m_gameData.players.end(), [&](const Player& player) { return player.ownBrawlerNetworkId == brawlerNetwork.networkId; });
