@@ -36,6 +36,8 @@ entt::entity BrawlerClient::BuildTemp(entt::registry& registry, Sel::Vector2f po
 
     registry.emplace<TemporaryEntityComponent>(entity, 2.0f);
 
+    registry.emplace<OneShotAnimation>(entity, false, "death", 1.f);
+
     // Load Ressources
     Sel::ResourceManager& resourceManager = Sel::ResourceManager::Instance();
     std::shared_ptr<Sel::Sprite> characterSprite = std::make_shared<Sel::Sprite>(BuildSpriteStatic(128.f, resourceManager));
@@ -47,7 +49,6 @@ entt::entity BrawlerClient::BuildTemp(entt::registry& registry, Sel::Vector2f po
 
     // Init Spritesheet Component
     auto& spriteSheetComp = registry.emplace<Sel::SpritesheetComponent>(entity, characterSpritesheet, characterSprite);
-    spriteSheetComp.PlayAnimation("death");
 
     auto& transform = registry.emplace<Sel::Transform>(entity);
     transform.SetPosition(position);

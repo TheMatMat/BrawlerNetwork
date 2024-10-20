@@ -482,7 +482,7 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 			std::cout << "Player " << player.name << " wants to spawn its brawler" << std::endl;
 
 			// On cree le brawler coté serveur
-			Brawler brawler(gameData.registry, Sel::Vector2f(100.f, 20.f), 0.f, 1.f, Sel::Vector2f(10.f, 0.f));
+			Brawler brawler(gameData.registry, Sel::Vector2f(0.f, 0.f), 0.f, 1.f, Sel::Vector2f(10.f, 0.f));
 
 
 			// on lui donne l'id de son player
@@ -659,6 +659,19 @@ void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, Sel::VelocitySy
 	velocitySystem.Update(TickDelay);
 	networkSystem.Update();
 
+	auto view = gameData.registry.view<Sel::Transform>();
+	for (auto&& [entity, transform] : view.each())
+	{
+		Sel::Vector2f position = transform.GetPosition();
+
+		// Clamp the position between -1000.f and 1000.f for each axis
+		position.x = std::clamp(position.x, -1000.f, 1000.f);
+		position.y = std::clamp(position.y, -1000.f, 1000.f);
+
+		// Set the clamped position back to the transform
+		transform.SetPosition(position);
+	}
+
 	if (gameData.gamesState == GameState::GameRunning)
 	{
 		// Update the collectible system and modify leaderbaord if one collection occured (return true) 
@@ -678,8 +691,8 @@ entt::handle spawn_collectible(GameData& gameData, const CollectibleType& type)
 	// random spawn position
 	std::random_device rd;
 	std::mt19937 gen(rd());
-	std::uniform_real_distribution<float> disX(WORLD_MIN_X, WORLD_MAX_X);
-	std::uniform_real_distribution<float> disY(WORLD_MIN_Y, WORLD_MAX_Y);
+	std::uniform_real_distribution<float> disX(-900.f, 900.f);
+	std::uniform_real_distribution<float> disY(-900.f, 900.f);
 
 	float spawnX = disX(gen);
 	float spawnY = disY(gen);
@@ -690,7 +703,7 @@ entt::handle spawn_collectible(GameData& gameData, const CollectibleType& type)
 	else
 		transform.SetPosition({ spawnX, spawnY });
 	transform.SetRotation(0.f);
-	transform.SetScale({ 0.5f, 0.5f });
+	transform.SetScale({ 1.f, 1.f });
 
 	// The server synchronize position of the entity with velocity component. 
 	// Sometimes the golden carrot is moved in/out the game space when it's catch/released instead of instantiate/destroyed
@@ -736,8 +749,8 @@ void start_game(GameData& gameData)
 		gameData.leaderBoard.push_back(&player);
 	}
 
-	// float goldenCarrotSpawnTime = static_cast<int>(gameData.playingPlayers.size() * 0.5f) * gameData.killInterval + 4.0f;
-	float goldenCarrotSpawnTime = 5.f;
+	float goldenCarrotSpawnTime = static_cast<int>(gameData.playingPlayers.size() * 0.5f) * gameData.killInterval + 4.0f;
+	// float goldenCarrotSpawnTime = 5.f;
 
 	gameData.goldenCarrot.goldenCarrotClock.Restart();
 	gameData.goldenCarrot.spawnTime = goldenCarrotSpawnTime;

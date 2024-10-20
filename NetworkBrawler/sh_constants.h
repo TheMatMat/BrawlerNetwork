@@ -9,15 +9,17 @@
 
 const std::uint16_t AppPort = 14769;
 
-const int WINDOW_WIDTH = 850;
-const int WINDOW_HEIGHT = 520;
+const int WINDOW_WIDTH = 1280;
+const int WINDOW_HEIGHT = 720;
 
 const float SCREEN_MARGIN = 10.f;
 
-const float WORLD_MIN_X = -500.f;
-const float WORLD_MAX_X = 500.f;
-const float WORLD_MIN_Y = -500.f;
-const float WORLD_MAX_Y = 500.f;
+const float KILL_INTERVAL = 30.f;
+
+const float WORLD_MIN_X = -940.f;
+const float WORLD_MAX_X = 1060.f;
+const float WORLD_MIN_Y = -1100.f;
+const float WORLD_MAX_Y = 900.f;
 
 enum class CollectibleType : std::uint8_t
 {
@@ -53,6 +55,7 @@ struct OneShotAnimation
 	std::string animationName;
 	float animationDuration;
 };
+
 
 constexpr float StealAnimationDuration = 0.5f;
 

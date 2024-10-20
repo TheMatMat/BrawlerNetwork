@@ -68,7 +68,7 @@ struct GameData
 	std::size_t previousSpectateIndex = 1;
 	std::uint8_t playerScore; 
 
-	float nextKillTimer = 10.f;
+	float nextKillTimer = KILL_INTERVAL;
 
 	float waitBeforeSpectate = 1.5f;
 	Sel::Stopwatch beforeSpectateClock;
@@ -80,6 +80,7 @@ struct GameData
 	std::map<std::uint32_t, PlayerData> players;
 	std::map<std::uint32_t, PlayerData> spectatablePlayers;
 	ENetPeer* serverPeer; //< Le serveur
+	entt::registry* registryBG;
 	entt::registry* registry;
 	entt::registry* registryUI;
 	Sel::Renderer* renderer;
@@ -105,6 +106,7 @@ Sel::Sprite BuildCollectibleSprite(float size, const CollectibleType& type);
 entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket& packet);
 entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std::string text, int fontSize, const Sel::Color& textColor, const std::string& fontPath, Sel::Vector2f origin = {0.5f, 0.5f}, bool isUI = true);
 void OneShotAnimationSystem(GameData& gameData, float deltaTime);
+Sel::Sprite BuildBGSprite(float size);
 
 int main()
 {
@@ -207,11 +209,13 @@ int main()
 	ImGui::SetCurrentContext(imgui.GetContext());
 
 	entt::registry registry;
+	entt::registry registryBG;
 	entt::registry registryUI;
 
 	/// ============ Animation & Rendering ============
 	Sel::RenderSystem renderSystem(renderer, registry);
 	Sel::RenderSystem renderSystemUI(renderer, registryUI);
+	Sel::RenderSystem renderSystemBG(renderer, registryBG);
 
 	Sel::AnimationSystem animationSystem(registry);
 	
@@ -236,6 +240,7 @@ int main()
 
 	gameData.registry = &registry;
 	gameData.registryUI = &registryUI;
+	gameData.registryBG = &registryBG;
 
 	gameData.gameState = GameState::Lobby;
 	gameData.playerMode = PlayerMode::Pending;
@@ -370,6 +375,15 @@ int main()
 
 	entt::handle cameraEntity = CreateCamera(registry);
 	entt::handle cameraEntityUI = CreateCamera(registryUI);
+	entt::handle cameraEntityBG = CreateCamera(registryBG);
+
+	// background
+	auto entityBg = gameData.registryBG->create();
+
+	auto& transform = gameData.registryBG->emplace<Sel::Transform>(entityBg);
+
+	auto& gfxComponent = gameData.registryBG->emplace<Sel::GraphicsComponent>(entityBg); 
+	gfxComponent.renderable = std::make_shared<Sel::Sprite>(BuildBGSprite(2000.f));
 
 	// On attend d'être initialisé (gameState et playerMode)
 	do 
@@ -417,7 +431,7 @@ int main()
 
 		imgui.NewFrame();
 
-		renderer.SetDrawColor(127, 0, 127, 255);
+		renderer.SetDrawColor(0, 0, 0, 255);
 		renderer.Clear();
 
 		// =============== UI LOBBY ===============
@@ -506,7 +520,7 @@ int main()
 		{
 			gameData.nextKillTimer -= deltaTime;
 			if (gameData.nextKillTimer <= 0)
-				gameData.nextKillTimer = 10.f;
+				gameData.nextKillTimer = KILL_INTERVAL;
 
 			if (uiKillTimerText.size() <= 0)
 			{
@@ -598,6 +612,8 @@ int main()
 		temporaryEntitySystem.Update(deltaTime);
 		temporaryEntitySystemUI.Update(deltaTime);
 		animationSystem.Update(deltaTime);
+
+		renderSystemBG.Update(deltaTime);
 		renderSystem.Update(deltaTime);
 		renderSystemUI.Update(deltaTime);
 
@@ -662,6 +678,9 @@ int main()
 
 		// Align ui camera with game one;
 		cameraEntityUI.get<Sel::Transform>().SetPosition(cameraEntity.get<Sel::Transform>().GetGlobalPosition());
+		cameraEntityBG.get<Sel::Transform>().SetPosition(cameraEntity.get<Sel::Transform>().GetGlobalPosition());
+
+		
 
 		if (worldEditor)
 			worldEditor->Render();
@@ -710,25 +729,35 @@ Sel::Sprite BuildCollectibleSprite(float size, const CollectibleType& type)
 	{
 		case CollectibleType::Carrot:
 		{
-			Sel::Sprite collectibleSprite(resourceManager.GetTexture("assets/ball.png"));
+			Sel::Sprite collectibleSprite(resourceManager.GetTexture("assets/berry.png"));
 
 			collectibleSprite.Resize(size, size);
 			collectibleSprite.SetOrigin({ 0.5f, 0.5f });
-			collectibleSprite.SetColor(Sel::Color(128.f, 0, 0));
 
 			return collectibleSprite;
 		}
 		case CollectibleType::GoldenCarrot:
 		{
-			Sel::Sprite collectibleSprite(resourceManager.GetTexture("assets/ball.png"));
+			Sel::Sprite collectibleSprite(resourceManager.GetTexture("assets/gold_berry.png"));
 
-			collectibleSprite.Resize(size * 2, size * 2);
+			collectibleSprite.Resize(size * 1.5f, size * 1.5f);
 			collectibleSprite.SetOrigin({ 0.5f, 0.5f });
-			collectibleSprite.SetColor(Sel::Color(0, 128.f, 0));
 
 			return collectibleSprite;
 		}
 	}
+}
+
+Sel::Sprite BuildBGSprite(float size)
+{
+	Sel::ResourceManager& resourceManager = Sel::ResourceManager::Instance();
+	
+	Sel::Sprite bgSprite(resourceManager.GetTexture("assets/background.png"));
+
+	bgSprite.Resize(size, size);
+	bgSprite.SetOrigin({ 0.5f, 0.5f });
+
+	return bgSprite;
 }
 
 entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket& packet)
@@ -748,7 +777,7 @@ entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket&
 
 	// Add graphics component
 	auto& gfxComponent = gameData.registry->emplace<Sel::GraphicsComponent>(newCollectible);
-	gfxComponent.renderable = std::make_shared<Sel::Sprite>(BuildCollectibleSprite(75.f, packet.type));
+	gfxComponent.renderable = std::make_shared<Sel::Sprite>(BuildCollectibleSprite(64.f, packet.type));
 
 	// On crée un handle
 	entt::handle handle = entt::handle(*(gameData.registry), newCollectible);
