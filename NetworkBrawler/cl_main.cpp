@@ -78,9 +78,12 @@ struct GameData
 	std::map<std::uint32_t, PlayerData> spectatablePlayers;
 	ENetPeer* serverPeer; //< Le serveur
 	entt::registry* registry;
+	entt::registry* registryUI;
 	Sel::Renderer* renderer;
 	FloatingEntitySystem* floatingEntitySystem;
+	FloatingEntitySystem* floatingEntitySystemUI;
 	TemporaryEntitySystem* temporaryEntitySystem;
+	TemporaryEntitySystem* temporaryEntitySystemUI;
 	std::unordered_map<std::uint32_t /*networkId*/, entt::handle> networkToEntities; //< toutes les entités (ici tous les brawlers)
 	PlayerInputs inputs; //< Les inputs du joueur
 	std::size_t ownPlayerIndex; //< Notre propre ID
@@ -97,7 +100,7 @@ void tick(GameData& gameData);
 entt::handle CreateCamera(entt::registry& registry);
 Sel::Sprite BuildCollectibleSprite(float size);
 entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket& packet);
-entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std::string text, int fontSize, const Sel::Color& textColor, const std::string& fontPath, Sel::Vector2f origin = {0.5f, 0.5f});
+entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std::string text, int fontSize, const Sel::Color& textColor, const std::string& fontPath, Sel::Vector2f origin = {0.5f, 0.5f}, bool isUI = true);
 
 int main()
 {
@@ -200,9 +203,11 @@ int main()
 	ImGui::SetCurrentContext(imgui.GetContext());
 
 	entt::registry registry;
+	entt::registry registryUI;
 
 	/// ============ Animation & Rendering ============
 	Sel::RenderSystem renderSystem(renderer, registry);
+	Sel::RenderSystem renderSystemUI(renderer, registryUI);
 
 	Sel::AnimationSystem animationSystem(registry);
 	
@@ -215,11 +220,18 @@ int main()
 
 	FloatingEntitySystem floatingEntitySystem(&registry);
 	gameData.floatingEntitySystem = &floatingEntitySystem;
+	
+	FloatingEntitySystem floatingEntitySystemUI(&registryUI);
+	gameData.floatingEntitySystemUI = &floatingEntitySystemUI;
 
 	TemporaryEntitySystem temporaryEntitySystem(registry);
 	gameData.temporaryEntitySystem = &temporaryEntitySystem;
+	
+	TemporaryEntitySystem temporaryEntitySystemUI(registryUI);
+	gameData.temporaryEntitySystemUI = &temporaryEntitySystemUI;
 
 	gameData.registry = &registry;
+	gameData.registryUI = &registryUI;
 
 	gameData.gameState = GameState::Lobby;
 	gameData.playerMode = PlayerMode::Pending;
@@ -340,6 +352,7 @@ int main()
 	#pragma endregion
 
 	entt::handle cameraEntity = CreateCamera(registry);
+	entt::handle cameraEntityUI = CreateCamera(registryUI);
 
 	// On attend d'être initialisé (gameState et playerMode)
 	do 
@@ -391,32 +404,32 @@ int main()
 		renderer.Clear();
 
 		// =============== UI LOBBY ===============
-		auto uiGetReadyTextView = gameData.registry->view<UI_GetReadyText>();
-		auto uiIsReadyTextView = gameData.registry->view<UI_IsReadyText>();
+		auto uiGetReadyTextView = gameData.registryUI->view<UI_GetReadyText>();
+		auto uiIsReadyTextView = gameData.registryUI->view<UI_IsReadyText>();
 		if (gameData.gameState == GameState::Lobby && gameData.playerMode != PlayerMode::Dead && gameData.playerMode != PlayerMode::Spectating)
 		{
 			if (!gameData.isReady)
 			{
 				for (auto& entity : uiIsReadyTextView)
-					gameData.registry->destroy(entity);
+					gameData.registryUI->destroy(entity);
 
 				if (uiGetReadyTextView.size() <= 0)
 				{
 					auto handle = CreateDisplayText(gameData, *(gameData.renderer), "Press SPACE to get ready", 34, Sel::Color::White, "assets/fonts/Happy Selfie.otf");
 					handle.emplace<UI_GetReadyText>();
-					floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
+					floatingEntitySystemUI.AddFloatingEntity(cameraEntityUI, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
 				}
 			}
 			else
 			{
 				for (auto& entity : uiGetReadyTextView)
-					gameData.registry->destroy(entity);
+					gameData.registryUI->destroy(entity);
 
 				if (uiIsReadyTextView.size() <= 0)
 				{
 					auto handle = CreateDisplayText(gameData, *(gameData.renderer), "You are ready! Waiting others...", 34, Sel::Color::FromRGBA8(0, 255, 0, 255), "assets/fonts/Happy Selfie.otf");
 					handle.emplace<UI_IsReadyText>();
-					floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
+					floatingEntitySystemUI.AddFloatingEntity(cameraEntityUI, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
 				}
 			}
 		}
@@ -425,12 +438,12 @@ int main()
 			if (uiIsReadyTextView.size() > 0)
 			{
 				for (auto& entity : uiIsReadyTextView)
-					gameData.registry->destroy(entity);
+					gameData.registryUI->destroy(entity);
 			}
 			if (uiGetReadyTextView.size() > 0)
 			{
 				for (auto& entity : uiGetReadyTextView)
-						gameData.registry->destroy(entity);
+						gameData.registryUI->destroy(entity);
 			}
 		}
 		// =============== END UI LOBBY ===============
@@ -438,13 +451,13 @@ int main()
 
 
 		// =============== UI SPECTATE MODE ===============
-		auto uiSpectatingTextView = gameData.registry->view<UI_SpectatingText>();
+		auto uiSpectatingTextView = gameData.registryUI->view<UI_SpectatingText>();
 		if (((gameData.playerMode == PlayerMode::Dead && gameData.gameState == GameState::GameRunning) || gameData.playerMode == PlayerMode::Spectating) && gameData.previousSpectateIndex != gameData.spectateIndex)
 		{
 			if (uiSpectatingTextView.size() > 0)
 			{
 				for (auto& entity : uiSpectatingTextView)
-					gameData.registry->destroy(entity);
+					gameData.registryUI->destroy(entity);
 			}
 
 			std::string spectatedName = "someone";
@@ -456,22 +469,22 @@ int main()
 
 			auto handle = CreateDisplayText(gameData, *(gameData.renderer), "<<(Q)<< Specating " + spectatedName + " >>(D)>>", 34, Sel::Color::White, "assets/fonts/Happy Selfie.otf");
 			handle.emplace<UI_SpectatingText>();
-			floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
+			floatingEntitySystemUI.AddFloatingEntity(cameraEntityUI, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
 		}
 		else
 		{
 			if (uiSpectatingTextView.size() > 0)
 			{
 				for (auto& entity : uiSpectatingTextView)
-					gameData.registry->destroy(entity);
+					gameData.registryUI->destroy(entity);
 			}
 		}
 		// =============== END UI SPECTATE MODE ===============
 		
 
 		// =============== UI IN GAME RUNNING ===============
-		auto uiKillTimerText = gameData.registry->view<UI_NextKillTimerText>();
-		auto uiKillTimerValue = gameData.registry->view<UI_NextKillTimerValue>();
+		auto uiKillTimerText = gameData.registryUI->view<UI_NextKillTimerText>();
+		auto uiKillTimerValue = gameData.registryUI->view<UI_NextKillTimerValue>();
 		if (gameData.gameState == GameState::GameRunning)
 		{
 			gameData.nextKillTimer -= deltaTime;
@@ -482,13 +495,13 @@ int main()
 			{
 				auto handle = CreateDisplayText(gameData, *(gameData.renderer), "Next kill in:", 20, Sel::Color::White, "assets/fonts/Happy Selfie.otf");
 				handle.emplace<UI_NextKillTimerText>();
-				floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.9f, WINDOW_HEIGHT * 0.25f });
+				floatingEntitySystemUI.AddFloatingEntity(cameraEntityUI, handle.entity(), { WINDOW_WIDTH * 0.9f, WINDOW_HEIGHT * 0.25f });
 			}
 
 			if (uiKillTimerValue.size() > 0)
 			{
 				for (auto& entity : uiKillTimerValue)
-					gameData.registry->destroy(entity);
+					gameData.registryUI->destroy(entity);
 			}
 
 			Sel::Color textColor = Sel::Color::White;
@@ -496,42 +509,42 @@ int main()
 				textColor = Sel::Color::Red;
 
 			int killTimerInt = static_cast<int>(gameData.nextKillTimer);
-			std::string killTimerStr = (killTimerInt < 1) ? "0" : std::to_string(killTimerInt);
+			std::string killTimerStr = (gameData.nextKillTimer < 1.f) ? "0" : std::to_string(killTimerInt);
 
 			auto handle = CreateDisplayText(gameData, *(gameData.renderer), killTimerStr, 30, textColor, "assets/fonts/Hey Comic.otf");
 			handle.emplace<UI_NextKillTimerValue>();
-			floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.9f, WINDOW_HEIGHT * 0.25f + 20.f });
+			floatingEntitySystemUI.AddFloatingEntity(cameraEntityUI, handle.entity(), { WINDOW_WIDTH * 0.9f, WINDOW_HEIGHT * 0.25f + 20.f });
 		}
 		else
 		{
 			if (uiKillTimerText.size() > 0)
 			{
 				for (auto& entity : uiKillTimerText)
-					gameData.registry->destroy(entity);
+					gameData.registryUI->destroy(entity);
 			}
 
 			if (uiKillTimerValue.size() > 0)
 			{
 				for (auto& entity : uiKillTimerValue)
-					gameData.registry->destroy(entity);
+					gameData.registryUI->destroy(entity);
 			}
 		}
 		// =============== END UI IN GAME RUNNING ===============
 
 		// =============== UI END SCREEN ===============
-		auto uiSEndScreenTextView = gameData.registry->view<UI_EndScreenText>();
+		auto uiSEndScreenTextView = gameData.registryUI->view<UI_EndScreenText>();
 		if (gameData.gameState == GameState::EndScreen && uiSEndScreenTextView.size() <= 0)
 		{
 			auto handle = CreateDisplayText(gameData, *(gameData.renderer), "Press SPACE to return to lobby", 34, Sel::Color::White, "assets/fonts/Happy Selfie.otf");
 			handle.emplace<UI_SpectatingText>();
-			floatingEntitySystem.AddFloatingEntity(cameraEntity, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
+			floatingEntitySystemUI.AddFloatingEntity(cameraEntityUI, handle.entity(), { WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT - 50.f });
 		}
 		else
 		{
 			if (uiSEndScreenTextView.size() > 0)
 			{
 				for (auto& entity : uiSEndScreenTextView)
-					gameData.registry->destroy(entity);
+					gameData.registryUI->destroy(entity);
 			}
 		}
 		// =============== END END SCREEN ===============
@@ -559,9 +572,12 @@ int main()
 		}
 
 		floatingEntitySystem.Update();
+		floatingEntitySystemUI.Update();
 		temporaryEntitySystem.Update(deltaTime);
+		temporaryEntitySystemUI.Update(deltaTime);
 		animationSystem.Update(deltaTime);
 		renderSystem.Update(deltaTime);
+		renderSystemUI.Update(deltaTime);
 
 		if (ImGui::Begin("Menu"))
 		{
@@ -576,6 +592,8 @@ int main()
 			}*/
 		}
 		ImGui::End();
+
+		
 
 		// Center camera on our brawler if not spectating
 		if (gameData.ownBrawlerNetworkIndex && gameData.playerMode == PlayerMode::Playing)
@@ -619,6 +637,9 @@ int main()
 				}
 			}
 		}
+
+		// Align ui camera with game one;
+		cameraEntityUI.get<Sel::Transform>().SetPosition(cameraEntity.get<Sel::Transform>().GetGlobalPosition());
 
 		if (worldEditor)
 			worldEditor->Render();
@@ -698,7 +719,7 @@ entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket&
 	return handle;
 }
 
-entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std::string text, int fontSize, const Sel::Color& textColor, const std::string& fontPath, Sel::Vector2f origin)
+entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std::string text, int fontSize, const Sel::Color& textColor, const std::string& fontPath, Sel::Vector2f origin, bool isUI)
 {
 	std::shared_ptr<Sel::Font> font = Sel::ResourceManager::Instance().GetFont(fontPath);
 	Sel::Surface surface = font->RenderUTF8Text(fontSize, text);
@@ -707,12 +728,24 @@ entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std:
 	sprite->SetColor(textColor);
 	sprite->SetOrigin(origin);
 
-	auto entityText = gameData.registry->create();
-	gameData.registry->emplace<Sel::Transform>(entityText);
-	gameData.registry->emplace<Sel::GraphicsComponent>(entityText).renderable = std::move(sprite);
+	entt::entity entityText;
+	entt::handle handle;
+	if (!isUI)
+	{
+		entityText = gameData.registry->create();
+		gameData.registry->emplace<Sel::Transform>(entityText);
+		gameData.registry->emplace<Sel::GraphicsComponent>(entityText).renderable = std::move(sprite);
 
-	// On crée un handle
-	entt::handle handle = entt::handle(*(gameData.registry), entityText);
+		handle = entt::handle(*(gameData.registry), entityText);
+	}
+	else
+	{
+		entityText = gameData.registryUI->create();
+		gameData.registryUI->emplace<Sel::Transform>(entityText);
+		gameData.registryUI->emplace<Sel::GraphicsComponent>(entityText).renderable = std::move(sprite);
+
+		handle = entt::handle(*(gameData.registryUI), entityText);
+	}
 
 	return handle;
 }
@@ -779,7 +812,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			
 
 			BrawlerClient brawler(*(gameData.registry), position, 0.f, scale, linearVelocity);
-			auto brawlerNameEntity = CreateDisplayText(gameData, *(gameData.renderer), brawlerName, 26, Sel::Color::White, "assets/fonts/Hey Comic.otf");
+			auto brawlerNameEntity = CreateDisplayText(gameData, *(gameData.renderer), brawlerName, 26, Sel::Color::White, "assets/fonts/Hey Comic.otf", {0.5f, 0.5f}, false);
 
 			gameData.floatingEntitySystem->AddFloatingEntity(brawler.GetHandle().entity(), brawlerNameEntity.entity(), { 0.f, -40.f });
 
@@ -951,17 +984,17 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 		case Opcode::S_UpdateLeaderboard:
 		{
 			// get camera
-			auto view = gameData.registry->view<Sel::CameraComponent, Sel::Transform>();
-			entt::entity cameraEntity;
+			auto view = gameData.registryUI->view<Sel::CameraComponent, Sel::Transform>();
+			entt::entity cameraEntityUI;
 			if (view.begin() != view.end())
-				cameraEntity = view.front();
+				cameraEntityUI = view.front();
 			else
 				break; // no camera to anchor the leaderboard
 
 			// Delete all entities with LeaderBoardLine
-			auto leaderboardLineView = gameData.registry->view<LeaderBoardLine>();
+			auto leaderboardLineView = gameData.registryUI->view<LeaderBoardLine>();
 			for (auto entity : leaderboardLineView) {
-				gameData.registry->destroy(entity); // Delete entities with LeaderBoardLine flag
+				gameData.registryUI->destroy(entity); // Delete entities with LeaderBoardLine flag
 			}
 
 			int fontSize = 24;
@@ -982,10 +1015,10 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 						textColor = Sel::Color::FromRGBA8(255, 165, 0, 255); // Je suis le dernier du leaderboard et je suis encore en vie = danger
 				}
 
-				auto textEntityHandle = CreateDisplayText(gameData, *(gameData.renderer), textToDisplay, fontSize, textColor, "assets/fonts/Happy Selfie.otf", {0.f, 0.f});
-				gameData.registry->emplace<LeaderBoardLine>(textEntityHandle);
+				auto textEntityHandle = CreateDisplayText(gameData, *(gameData.renderer), textToDisplay, fontSize, textColor, "assets/fonts/Happy Selfie.otf", {0.f, 0.f}, true);
+				gameData.registryUI->emplace<LeaderBoardLine>(textEntityHandle);
 
-				gameData.floatingEntitySystem->AddFloatingEntity(cameraEntity, textEntityHandle, { 0.f + SCREEN_MARGIN, displayOffset + SCREEN_MARGIN });
+				gameData.floatingEntitySystemUI->AddFloatingEntity(cameraEntityUI, textEntityHandle, { 0.f + SCREEN_MARGIN, displayOffset + SCREEN_MARGIN });
 
 				displayOffset += (float)fontSize + interlineOffset;
 				index++;
