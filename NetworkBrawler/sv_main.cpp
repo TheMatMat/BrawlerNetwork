@@ -269,7 +269,7 @@ int main()
 							Player& player = *it;
 
 							// Update its score
-							//player.playerScore++;
+							player.playerScore++;
 						}
 						gameData.goldenCarrot.pointPulseClock.Restart();
 
@@ -592,6 +592,61 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 
 			break;
 		}
+
+		case Opcode::C_PlayerStealRequest:
+		{
+			PlayerStealPacketRequest packet = PlayerStealPacketRequest::Deserialize(message, offset);
+
+			// On informe tout le monde qu'un brawler tente un vol (pour jouer l'animation chez tous les clients) sauf le voleur qui joue l'anim lui-même;
+			PlayerStealPacket stealPacket;
+			stealPacket.brawlerId = packet.brawlerId;
+
+			for (auto& playingPlayer : gameData.playingPlayers)
+			{
+				if (!playingPlayer->peer /*|| player.peer == playingPlayer->peer*/)
+					continue;
+
+				enet_peer_send(playingPlayer->peer, 0, build_packet(stealPacket, ENET_PACKET_FLAG_RELIABLE));
+			}
+			
+			if (!gameData.goldenCarrot.isSpawned || !gameData.goldenCarrot.owningBrawlerId.has_value())
+				break;
+
+
+			auto itStealer = gameData.networkToEntity.find(packet.brawlerId);
+			if (itStealer == gameData.networkToEntity.end())
+				break;
+
+			Sel::Vector2f transformStealerPosition = itStealer->second.try_get<Sel::Transform>()->GetGlobalPosition();
+
+			auto view = gameData.registry.view<Sel::Transform, BrawlerFlag, NetworkedComponent>(entt::exclude<DeadFlag>);
+			for (auto&& [entity, transform, flag, network] : view.each())
+			{
+				if (network.networkId != packet.brawlerId) // Ce brawler n'a pas la golden carotte. Pas nécessaire de checker si on en est assez proche pour le voler
+					continue; 
+
+				Sel::Vector2f transformPosition = gameData.registry.try_get<Sel::Transform>(entity)->GetGlobalPosition();
+
+				// Squared Distance
+				Sel::Vector2f delta = transformStealerPosition - transformPosition;
+				float distanceSqr = delta.x * delta.x + delta.y * delta.y;
+
+				if (distanceSqr <= 50.f * 50.f)
+				{
+					std::cout << "steal" << std::endl;
+					gameData.goldenCarrot.goldenCarrotClock.Restart();
+					gameData.goldenCarrot.owningBrawlerId = packet.brawlerId;
+				}
+				else
+				{
+					std::cout << "no steal" << std::endl;
+				}
+
+				break; // Il n'y a qu'un seul porteur de golden carotte et on viens de le checker. on sort de la boucle
+			}
+
+			break;
+		}
 	}
 }
 
@@ -710,7 +765,6 @@ void end_game(GameData& gameData)
 	}
 
 	// reset golden carrot
-	gameData.goldenCarrot.handle.destroy();
 	gameData.goldenCarrot.isSpawned = false;
 	gameData.goldenCarrot.owningBrawlerId.reset();
 

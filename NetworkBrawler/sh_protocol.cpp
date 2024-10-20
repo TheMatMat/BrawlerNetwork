@@ -447,6 +447,20 @@ PlayerReadyPacket PlayerReadyPacket::Deserialize(const std::vector<std::uint8_t>
 	return packet;
 }
 
+void PlayerStealPacketRequest::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u32(byteArray, brawlerId);
+}
+
+PlayerStealPacketRequest PlayerStealPacketRequest::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	PlayerStealPacketRequest packet;
+
+	packet.brawlerId = Deserialize_u32(byteArray, offset);
+
+	return packet;
+}
+
 void WinnerPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 {
 	Serialize_u32(byteArray, brawlerNetworkId);
@@ -525,6 +539,20 @@ BrawlerDeathPacket BrawlerDeathPacket::Deserialize(const std::vector<std::uint8_
 	packet.deathPosition = { deathX, deathY };
 
 	packet.deathScaleX = Deserialize_i8(byteArray, offset);
+
+	return packet;
+}
+
+void PlayerStealPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u32(byteArray, brawlerId);
+}
+
+PlayerStealPacket PlayerStealPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	PlayerStealPacket packet;
+
+	packet.brawlerId = Deserialize_u32(byteArray, offset);
 
 	return packet;
 }

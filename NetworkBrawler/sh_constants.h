@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 // Ce fichier contient des constantes pouvant être utiles à la fois côté serveur et client
 
@@ -45,6 +46,15 @@ enum class BrawlerSkin : std::uint8_t
 	Sheep,
 	Turtle
 };
+
+struct OneShotAnimation
+{
+	bool isPlaying;
+	std::string animationName;
+	float animationDuration;
+};
+
+constexpr float StealAnimationDuration = 0.5f;
 
 // Tickrate physique et réseau
 constexpr float TickDelay = 1.f / 30.f;

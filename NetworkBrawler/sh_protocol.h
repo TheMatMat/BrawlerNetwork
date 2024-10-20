@@ -21,10 +21,12 @@ enum class Opcode : std::uint8_t
 	S_DeleteShape,
 	S_ShapeStates,*/
 
-	S_PlayerList,
 	C_CreateBrawlerRequest,
 	C_PlayerInputs,
+	C_PlayerStealRequest,
 	C_PlayerReady,
+	S_PlayerSteal,
+	S_PlayerList,
 	S_CreateBrawler,
 	S_CreateCollectible,
 	S_BrawlerStates,
@@ -107,6 +109,16 @@ struct PlayerReadyPacket
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static PlayerReadyPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
+struct PlayerStealPacketRequest
+{
+	static constexpr Opcode opcode = Opcode::C_PlayerStealRequest;
+
+	std::uint32_t brawlerId;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static PlayerStealPacketRequest Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
 struct UpdateGameStatePacket
@@ -237,6 +249,16 @@ struct CollectibleCollectedPacket
 
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static CollectibleCollectedPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
+struct PlayerStealPacket
+{
+	static constexpr Opcode opcode = Opcode::S_PlayerSteal;
+
+	std::uint32_t brawlerId;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static PlayerStealPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
 
 // Le serveur indique aux joueurs un changement de leaderboard

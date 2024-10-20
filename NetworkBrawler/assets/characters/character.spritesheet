@@ -38,7 +38,21 @@
 				"x": 0,
 				"y": 630
 			}
+		},
+		{
+			"frameCount": 4,
+			"frameDuration": 0.075,
+			"name": "steal",
+			"size": {
+				"x": 42,
+				"y": 42
+			},
+			"start": {
+				"x": 0,
+				"y": 546
+			}
 		}
+
 		
 	]
 }

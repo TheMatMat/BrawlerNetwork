@@ -73,6 +73,9 @@ struct GameData
 	float waitBeforeSpectate = 1.5f;
 	Sel::Stopwatch beforeSpectateClock;
 
+	float stealCooldown = 1.5f;
+	Sel::Stopwatch timeSinceLastSteal;
+
 	std::string name;
 	std::map<std::uint32_t, PlayerData> players;
 	std::map<std::uint32_t, PlayerData> spectatablePlayers;
@@ -101,6 +104,7 @@ entt::handle CreateCamera(entt::registry& registry);
 Sel::Sprite BuildCollectibleSprite(float size, const CollectibleType& type);
 entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket& packet);
 entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std::string text, int fontSize, const Sel::Color& textColor, const std::string& fontPath, Sel::Vector2f origin = {0.5f, 0.5f}, bool isUI = true);
+void OneShotAnimationSystem(GameData& gameData, float deltaTime);
 
 int main()
 {
@@ -348,6 +352,19 @@ int main()
 
 					enet_peer_send(gameData.serverPeer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
 				}
+
+				if (gameData.gameState == GameState::GameRunning && gameData.playerMode == PlayerMode::Playing && gameData.timeSinceLastSteal.GetElapsedTime() >= gameData.stealCooldown)
+				{
+					if (!pressed)
+						return;
+
+					gameData.timeSinceLastSteal.Restart();
+
+					PlayerStealPacketRequest packet;
+					packet.brawlerId = gameData.ownBrawlerNetworkIndex.value();
+
+					enet_peer_send(gameData.serverPeer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+				}
 			});
 	#pragma endregion
 
@@ -560,6 +577,9 @@ int main()
 			{
 				transform.SetScale({ 1.f, 1.f });
 			}
+
+			if (gameData.registry->any_of<OneShotAnimation>(entity))
+				continue;
 			
 			if (velocity.linearVel.Magnitude() > 0.f)
 			{
@@ -570,6 +590,8 @@ int main()
 				spritesheetComp.PlayAnimation("idle");
 			}
 		}
+
+		OneShotAnimationSystem(gameData, deltaTime);
 
 		floatingEntitySystem.Update();
 		floatingEntitySystemUI.Update();
@@ -766,6 +788,24 @@ entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std:
 	}
 
 	return handle;
+}
+
+void OneShotAnimationSystem(GameData& gameData, float deltaTime)
+{
+	auto view = gameData.registry->view<OneShotAnimation, Sel::SpritesheetComponent>();
+	for (auto&& [entity, animation, spritesheetComp] : view.each())
+	{
+		if (!animation.isPlaying)
+		{
+			spritesheetComp.PlayAnimation(animation.animationName);
+			animation.isPlaying = true;
+		}
+
+		animation.animationDuration -= deltaTime;
+
+		if (animation.animationDuration <= 0.f)
+			gameData.registry->remove<OneShotAnimation>(entity);
+	}
 }
 
 void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData)
@@ -1080,6 +1120,21 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			auto spectableIt = gameData.spectatablePlayers.find(packet.playerId);
 			if (spectableIt != gameData.spectatablePlayers.end())
 				gameData.spectatablePlayers.erase(spectableIt);
+
+			break;
+		}
+		
+		case Opcode::S_PlayerSteal:
+		{
+			PlayerStealPacket packet = PlayerStealPacket::Deserialize(message, offset);
+
+			auto it = gameData.networkToEntities.find(packet.brawlerId); 
+			if (it != gameData.networkToEntities.end())
+			{
+				it->second.emplace_or_replace<OneShotAnimation>(false, "steal", 0.3f);
+			}
+
+			break;
 		}
 
 		case Opcode::S_Winner:
@@ -1145,3 +1200,4 @@ void tick(GameData& gameData)
 
 	enet_peer_send(gameData.serverPeer, 0, build_packet(playerInputs, 0));
 }
+
