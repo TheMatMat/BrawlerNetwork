@@ -52,8 +52,8 @@ struct GameData
 	float nextTick = 0.f;
 	float tickInterval = TickDelay;
 
-	float nextKill = 1000.f;
-	float killInterval = 1000.f;
+	float nextKill = 30.f;
+	float killInterval = 30.f;
 
 	GoldenCarrot& goldenCarrot;
 

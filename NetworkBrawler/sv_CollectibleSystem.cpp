@@ -17,7 +17,7 @@ bool CollectibleSystem::Update()
 {
     bool collectionOccured = false;
 	auto collectibleView = m_registry.view<Sel::Transform, CollectibleFlag, NetworkedComponent>();
-	auto brawlerView = m_registry.view<Sel::Transform, BrawlerFlag, NetworkedComponent>();
+	auto brawlerView = m_registry.view<Sel::Transform, BrawlerFlag, NetworkedComponent>(entt::exclude<DeadFlag>);
 
     // Loop through all collectibles
     for (auto collectible : collectibleView)

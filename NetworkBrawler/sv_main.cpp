@@ -136,12 +136,21 @@ int main()
 						if (it != gameData.networkToEntity.end())
 						{
 							entt::handle entityHandle = it->second;
+
+							// S'il avait la golden carrot on la remet en jeu à l'emplacement de la mort
+							if (&(gameData.goldenCarrot) && gameData.goldenCarrot.owningBrawlerId == player.ownBrawlerNetworkId)
+							{
+								gameData.goldenCarrot.handle.try_get<Sel::Transform>()->SetPosition(entityHandle.try_get<Sel::Transform>()->GetPosition());
+								gameData.goldenCarrot.owningBrawlerId.reset();
+							}
+
 							gameData.registry.destroy(entityHandle);
 
 							gameData.networkToEntity.erase(it);
 
 						}
 					}
+
 					player.ownBrawlerNetworkId.reset();
 
 					// Supprimer le joueur de gameData.playingPlayers et gameData.leaderBoard
@@ -154,6 +163,8 @@ int main()
 						std::remove(gameData.leaderBoard.begin(), gameData.leaderBoard.end(), &player),
 						gameData.leaderBoard.end()
 					);
+
+					update_leaderboard(gameData);
 
 
 					// On renvoie la liste des joueurs à tous les joueurs (si ce joueur avait un nom)
@@ -258,7 +269,7 @@ int main()
 							Player& player = *it;
 
 							// Update its score
-							player.playerScore++;
+							//player.playerScore++;
 						}
 						gameData.goldenCarrot.pointPulseClock.Restart();
 
@@ -313,6 +324,13 @@ int main()
 								}
 
 								update_leaderboard(gameData);
+
+								// S'il avait la golden carrot on la remet en jeu
+								if (gameData.goldenCarrot.owningBrawlerId == (*it)->ownBrawlerNetworkId)
+								{
+									gameData.goldenCarrot.handle.try_get<Sel::Transform>()->SetPosition(deathPosition);
+									gameData.goldenCarrot.owningBrawlerId.reset();
+								}
 
 								// On notifie tout les joueurs de cette mort
 								BrawlerDeathPacket packet;
@@ -690,6 +708,11 @@ void end_game(GameData& gameData)
 	{
 		velocity.linearVel = Sel::Vector2f(0.f, 0.f);
 	}
+
+	// reset golden carrot
+	gameData.goldenCarrot.handle.destroy();
+	gameData.goldenCarrot.isSpawned = false;
+	gameData.goldenCarrot.owningBrawlerId.reset();
 
 	// Notifions tout le monde qu'il y a un gagnant
 	WinnerPacket packet;

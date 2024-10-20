@@ -948,9 +948,9 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 					if (gameData.playerMode != PlayerMode::Pending)
 					{
 						// Delete all entities with LeaderBoardLine
-						auto leaderboardLineView = gameData.registry->view<LeaderBoardLine>();
+						auto leaderboardLineView = gameData.registryUI->view<LeaderBoardLine>();
 						for (auto entity : leaderboardLineView) {
-							gameData.registry->destroy(entity); // Delete entities with LeaderBoardLine flag
+							gameData.registryUI->destroy(entity); // Delete entities with LeaderBoardLine flag
 						}
 					}
 
