@@ -54,8 +54,20 @@ struct ClientNetworkId
 	std::uint32_t networkId;
 };
 
+struct GoldenData
+{
+	bool isSpawned = false;
+	std::optional<std::uint32_t> ownerId;
+	std::optional<std::uint32_t> goldenBerryId;
+	std::optional<Sel::Vector2f> position;
+};
+
 struct GameData
 {
+	GameData(GoldenData& _goldenData) :
+		goldenData(_goldenData)
+	{}
+	
 	Sel::Stopwatch clock;
 	float nextTick = 0.f;
 	float tickInterval = TickDelay;
@@ -93,6 +105,8 @@ struct GameData
 	std::size_t ownPlayerIndex; //< Notre propre ID
 	std::optional<std::uint32_t> ownBrawlerNetworkIndex; //< l'ID reseau de notre brawler
 
+	GoldenData& goldenData;
+
 	float interpolationFactor = 0.f;
 	std::vector<BrawlerStatesPacket> snapshots;
 };
@@ -107,10 +121,15 @@ entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket&
 entt::handle CreateDisplayText(GameData& gameData, Sel::Renderer& renderer, std::string text, int fontSize, const Sel::Color& textColor, const std::string& fontPath, Sel::Vector2f origin = {0.5f, 0.5f}, bool isUI = true);
 void OneShotAnimationSystem(GameData& gameData, float deltaTime);
 Sel::Sprite BuildBGSprite(float size);
+Sel::Sprite BuildIndicatorSprite(float size);
+
+void NewAnnouncement(GameData& gameData, std::string text, Sel::Color color, int fontSize);
+void AnnouncementSystem(GameData& gameData, entt::entity camera, float deltaTime);
 
 int main()
 {
-	GameData gameData;
+	GoldenData goldenData;
+	GameData gameData(goldenData);
 	if (enet_initialize() != 0)
 	{
 		std::cout << "Failed to initialize ENet" << std::endl;
@@ -580,6 +599,90 @@ int main()
 		}
 		// =============== END END SCREEN ===============
 
+		// ============== GOLDEN INDICATOR ==============
+		
+
+		auto indicatorView = gameData.registryUI->view<Indicator>();
+
+		entt::entity indicatorEntity;
+		if (indicatorView.size() <= 0) // Only create the indicator if it doesn't already exist
+		{
+			indicatorEntity = gameData.registryUI->create();
+
+			auto& indicatorTransform = gameData.registryUI->emplace<Sel::Transform>(indicatorEntity);
+
+			auto& indicatorGFx = gameData.registryUI->emplace<Sel::GraphicsComponent>(indicatorEntity);
+			indicatorGFx.renderable = std::make_shared<Sel::Sprite>(BuildIndicatorSprite(30.f));
+
+			gameData.registryUI->emplace<Indicator>(indicatorEntity);
+		}
+		else
+		{
+			indicatorEntity = *indicatorView.begin(); // Reuse the existing indicator entity
+		}
+
+		auto& indicatorTransform = gameData.registryUI->get<Sel::Transform>(indicatorEntity);
+
+		if (gameData.goldenData.ownerId.has_value() && gameData.goldenData.ownerId.value() == gameData.ownBrawlerNetworkIndex)
+		{
+			if (indicatorView.size() > 0)
+			{
+				for (auto& entity : indicatorView)
+				{
+					gameData.registryUI->destroy(entity);
+				}
+			}
+		}
+		else if (gameData.gameState == GameState::GameRunning && gameData.playerMode == PlayerMode::Playing && gameData.goldenData.isSpawned)
+		{
+
+			Sel::Vector2f goldenBerryPosition;
+
+			// If the golden carrot is owned by a player (point towards the brawler who possesses it)
+			if (gameData.goldenData.ownerId.has_value())
+			{
+				auto it = gameData.networkToEntities.find(gameData.goldenData.ownerId.value());
+				if (it != gameData.networkToEntities.end())
+				{
+					auto targetTransform = it->second.try_get<Sel::Transform>();
+					if (targetTransform)
+					{
+						goldenBerryPosition = targetTransform->GetPosition();
+					}
+				}
+			}
+			// Otherwise, locate the golden carrot directly in the game world
+			else
+			{
+				auto view = gameData.registry->view<Sel::Transform, GoldenCarrotFlag>();
+				for (auto&& [entity, transform] : view.each())
+				{
+					goldenBerryPosition = transform.GetPosition();
+				}
+			}
+
+
+			Sel::Vector2f cameraPosition = cameraEntityUI.try_get<Sel::Transform>()->GetPosition() + Sel::Vector2f({ WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT * 0.5f });
+			Sel::Vector2f direction = Sel::Vector2f::Normal(goldenBerryPosition - cameraPosition);
+
+			// Multiply by 100.f to get the final position
+			Sel::Vector2f finalPosition = direction * 100.f;
+
+			indicatorTransform.SetPosition(cameraPosition + finalPosition);
+		}
+		else
+		{
+			if (indicatorView.size() > 0)
+			{
+				for (auto& entity : indicatorView)
+				{
+					gameData.registryUI->destroy(entity);
+				}
+			}
+		}
+		// ============== END GOLDEN INDICATOR ==============
+
+
 		auto viewBrawler = gameData.registry->view<BrawlerFlag, Sel::VelocityComponent, Sel::Transform, Sel::SpritesheetComponent>();
 		for (auto&& [entity, flag, velocity, transform, spritesheetComp] : viewBrawler.each())
 		{
@@ -606,6 +709,7 @@ int main()
 		}
 
 		OneShotAnimationSystem(gameData, deltaTime);
+		AnnouncementSystem(gameData, cameraEntityUI.entity(), deltaTime);
 
 		floatingEntitySystem.Update();
 		floatingEntitySystemUI.Update();
@@ -616,6 +720,7 @@ int main()
 		renderSystemBG.Update(deltaTime);
 		renderSystem.Update(deltaTime);
 		renderSystemUI.Update(deltaTime);
+
 
 		if (ImGui::Begin("Menu"))
 		{
@@ -631,7 +736,7 @@ int main()
 		}
 		ImGui::End();
 
-		
+		// ============== CAMERA MANAGEMENT ==============
 
 		// Center camera on our brawler if not spectating
 		if (gameData.ownBrawlerNetworkIndex && gameData.playerMode == PlayerMode::Playing)
@@ -680,19 +785,19 @@ int main()
 		cameraEntityUI.get<Sel::Transform>().SetPosition(cameraEntity.get<Sel::Transform>().GetGlobalPosition());
 		cameraEntityBG.get<Sel::Transform>().SetPosition(cameraEntity.get<Sel::Transform>().GetGlobalPosition());
 
+		// ============== END CAMERA MANAGEMENT ==============
 		
 
-		if (worldEditor)
+		/*if (worldEditor)
 			worldEditor->Render();
 
-		imgui.Render(renderer);
+		imgui.Render(renderer);*/
 
 		renderer.Present();
 
 		// On vérifie si assez de temps s'est écoulé pour faire avancer la logique du jeu
 		if (now >= gameData.nextTick)
 		{
-			//worldLimit.Update();
 
 			// On met à jour la logique du jeu
 			tick(gameData);
@@ -760,6 +865,18 @@ Sel::Sprite BuildBGSprite(float size)
 	return bgSprite;
 }
 
+Sel::Sprite BuildIndicatorSprite(float size)
+{
+	Sel::ResourceManager& resourceManager = Sel::ResourceManager::Instance();
+
+	Sel::Sprite indicatorSprite(resourceManager.GetTexture("assets/gold_berry.png"));
+
+	indicatorSprite.Resize(size, size);
+	indicatorSprite.SetOrigin({ 0.5f, 0.5f });
+
+	return indicatorSprite;
+}
+
 entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket& packet)
 {
 	entt::entity newCollectible = gameData.registry->create();
@@ -773,7 +890,8 @@ entt::handle SpawnCollectible(GameData& gameData, const CreateCollectiblePacket&
 	auto& collectibleType = gameData.registry->emplace<CollectibleFlag>(newCollectible);
 	collectibleType.type = packet.type;
 
-	gameData.registry->emplace<GoldenCarrotFlag>(newCollectible);
+	if(packet.type == CollectibleType::GoldenCarrot)
+		gameData.registry->emplace<GoldenCarrotFlag>(newCollectible);
 
 	// Add graphics component
 	auto& gfxComponent = gameData.registry->emplace<Sel::GraphicsComponent>(newCollectible);
@@ -917,10 +1035,10 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 
 			SpawnCollectible(gameData, packet);
 
-			if(packet.type == CollectibleType::GoldenCarrot)
+			/*if(packet.type == CollectibleType::GoldenCarrot)
 				std::cout << "new GoldenCarrot" << std::endl;
 			else
-				std::cout << "new Collectible" << std::endl;
+				std::cout << "new Collectible" << std::endl;*/
 
 
 			break;
@@ -1012,6 +1130,10 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 					{
 						gameData.playerScore = 0;
 					}
+
+					// Reset Golden Data
+					gameData.goldenData.isSpawned = false;
+					gameData.goldenData.ownerId.reset();
 
 					// Clear UI
 					if (gameData.playerMode != PlayerMode::Pending)
@@ -1123,6 +1245,13 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 		{
 			BrawlerDeathPacket packet = BrawlerDeathPacket::Deserialize(message, offset);
 
+			// Mark the player as dead in gameData.players
+			auto it = gameData.players.find(packet.playerId);
+			if (it != gameData.players.end())
+				it->second.isDead = true;
+
+			NewAnnouncement(gameData, it->second.name + " died... poor " + it->second.name, Sel::Color::Red, 30);
+
 			if (packet.brawlerId == gameData.ownBrawlerNetworkIndex)
 			{
 				std::cout << "Im Dead" << std::endl;
@@ -1140,10 +1269,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			// Spawn temp entity for death anim
 			BrawlerClient::BuildTemp(*(gameData.registry), packet.deathPosition, bFlip);
 
-			// Mark the player as dead in gameData.players
-			auto it = gameData.players.find(packet.playerId);
-			if (it != gameData.players.end())
-				it->second.isDead = true;
+			
 
 			// Remove the player from gameData.spectablePlayers if it exists
 			auto spectableIt = gameData.spectatablePlayers.find(packet.playerId);
@@ -1179,6 +1305,82 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			}
 
 			break;
+		}
+
+		case Opcode::S_GoldenEvent:
+		{
+			GoldenEventPacket packet = GoldenEventPacket::Deserialize(message, offset);
+			std::string text = "";
+
+			switch (packet.eventType)
+			{
+				case GoldenEventPacket::GoldenEventType::Spawn:
+				{
+					text = "The golden berry has spawn in the middle!";
+					NewAnnouncement(gameData, text, Sel::Color::FromRGBA8(255, 223, 128), 30);
+
+					gameData.goldenData.isSpawned = true;
+
+					break;
+				}
+
+				case GoldenEventPacket::GoldenEventType::Gathered:
+				{
+					text = "Someone got the golden berry... Steal it!";
+
+					auto it = std::find_if(gameData.players.begin(), gameData.players.end(),
+						[&packet](const std::pair<const std::uint32_t, PlayerData>& pair) {
+							return pair.second.ownBrawlerId.has_value() && pair.second.ownBrawlerId.value() == packet.newOwner;
+						});
+					if (it != gameData.players.end())
+						text = it->second.name + " got the golden berry.. Steal it!";
+
+					gameData.goldenData.ownerId = packet.newOwner;
+
+					NewAnnouncement(gameData, text, Sel::Color::FromRGBA8(255, 223, 128), 30);
+					break;
+				}
+
+				case GoldenEventPacket::GoldenEventType::Released:
+				{
+					text = "The gold berry has been lost. That's your chance!";
+
+					auto it = std::find_if(gameData.players.begin(), gameData.players.end(),
+						[&packet](const std::pair<const std::uint32_t, PlayerData>& pair) {
+							return pair.second.ownBrawlerId.has_value() && pair.second.ownBrawlerId.value() == packet.previousOwner;
+						});
+					if (it != gameData.players.end())
+						text = it->second.name + " lost the golden berry... That's your chance!";
+
+					gameData.goldenData.ownerId.reset();
+
+					NewAnnouncement(gameData, text, Sel::Color::FromRGBA8(255, 223, 128), 30);
+					break;
+				}
+
+				case GoldenEventPacket::GoldenEventType::Steal:
+				{
+					text = "The gold berry has been stolen!";
+
+					auto it = std::find_if(gameData.players.begin(), gameData.players.end(),
+						[&packet](const std::pair<const std::uint32_t, PlayerData>& pair) {
+							return pair.second.ownBrawlerId.has_value() && pair.second.ownBrawlerId.value() == packet.previousOwner;
+						});
+
+					auto it2 = std::find_if(gameData.players.begin(), gameData.players.end(),
+						[&packet](const std::pair<const std::uint32_t, PlayerData>& pair) {
+							return pair.second.ownBrawlerId.has_value() && pair.second.ownBrawlerId.value() == packet.newOwner;
+						});
+
+					if (it != gameData.players.end() && it2 != gameData.players.end())
+						text = it2->second.name + " stole the golden berry to " + it->second.name + "!";
+
+					gameData.goldenData.ownerId = packet.newOwner;
+
+					NewAnnouncement(gameData, text, Sel::Color::FromRGBA8(255, 223, 128), 30);
+					break;
+				}
+			}
 		}
 	}
 }
@@ -1218,6 +1420,46 @@ bool run_network(ENetHost* host, GameData& gameData)
 	}
 
 	return true;
+}
+
+void NewAnnouncement(GameData& gameData, std::string text, Sel::Color color, int fontSize)
+{
+	// On remonte toutes les annonces deja presentent
+	auto view = gameData.registryUI->view<Announcement>();
+	for (auto&& [entity, announcement] : view.each())
+	{
+		announcement.offset -= {0.f, (float)fontSize + 10.f};
+	}
+
+	auto handle = CreateDisplayText(gameData, *(gameData.renderer), std::move(text), fontSize, color, "assets/fonts/Happy Selfie.otf", {0.5f, 0.5f}, true);
+	auto& announcement = handle.emplace<Announcement>();
+	announcement.offset = {0.f, 0.f};
+	announcement.remainingTime = 3.0f;
+}
+
+void AnnouncementSystem(GameData& gameData, entt::entity camera, float deltaTime)
+{
+	auto cameraTransform = gameData.registryUI->try_get<Sel::Transform>(camera);
+	if (!cameraTransform)
+		return;
+
+	auto view = gameData.registryUI->view<Sel::Transform, Announcement>();
+	for (auto&& [entity, transform, announcement] : view.each())
+	{
+		if (gameData.gameState == GameState::Lobby)
+		{
+			gameData.registryUI->destroy(entity);
+			continue;
+		}
+
+		Sel::Vector2f newPosition = cameraTransform->GetPosition() + Sel::Vector2f({WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT * 0.25f}) + announcement.offset;
+		transform.SetPosition(newPosition); 
+
+		announcement.remainingTime -= deltaTime;
+
+		if (announcement.remainingTime <= 0.f)
+			gameData.registryUI->destroy(entity);
+	}
 }
 
 

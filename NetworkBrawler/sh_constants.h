@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <Sel/Vector2.hpp>
 
 // Ce fichier contient des constantes pouvant être utiles à la fois côté serveur et client
 
@@ -56,6 +57,14 @@ struct OneShotAnimation
 	float animationDuration;
 };
 
+struct Announcement
+{
+	Sel::Vector2f offset;
+	float remainingTime;
+};
+
+struct Indicator
+{};
 
 constexpr float StealAnimationDuration = 0.5f;
 

@@ -38,6 +38,8 @@ enum class Opcode : std::uint8_t
 	S_UpdateLeaderboard,
 	S_BrawlerDeath,
 	S_Winner,
+
+	S_GoldenEvent,
 };
 
 struct BrawlerFlag
@@ -308,6 +310,28 @@ struct DeleteEntityPacket
 	void Serialize(std::vector<std::uint8_t>& byteArray) const;
 	static DeleteEntityPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
 };
+
+struct GoldenEventPacket
+{
+	static constexpr Opcode opcode = Opcode::S_GoldenEvent;
+
+	enum class GoldenEventType : std::uint8_t
+	{
+		None,
+		Spawn,
+		Gathered,
+		Released,
+		Steal,
+	};
+
+	GoldenEventType eventType = GoldenEventType::None;
+	std::uint32_t previousOwner = 0;
+	std::uint32_t newOwner = 0;
+
+	void Serialize(std::vector<std::uint8_t>& byteArray) const;
+	static GoldenEventPacket Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset);
+};
+
 
 void Serialize_color(std::vector<std::uint8_t>& byteArray, const Sel::Color& value);
 void Serialize_f32(std::vector<std::uint8_t>& byteArray, float value);

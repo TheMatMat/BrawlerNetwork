@@ -140,8 +140,23 @@ int main()
 							// S'il avait la golden carrot on la remet en jeu à l'emplacement de la mort
 							if (&(gameData.goldenCarrot) && gameData.goldenCarrot.owningBrawlerId == player.ownBrawlerNetworkId)
 							{
+								// On notifie tout le monde
+								GoldenEventPacket packet;
+								packet.eventType = GoldenEventPacket::GoldenEventType::Released;
+
+								packet.previousOwner = gameData.goldenCarrot.owningBrawlerId.value();
+
+								for (auto& player : gameData.players)
+								{
+									if (!player.peer)
+										continue;
+
+									enet_peer_send(player.peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+								}
+
 								gameData.goldenCarrot.handle.try_get<Sel::Transform>()->SetPosition(entityHandle.try_get<Sel::Transform>()->GetPosition());
 								gameData.goldenCarrot.owningBrawlerId.reset();
+
 							}
 
 							gameData.registry.destroy(entityHandle);
@@ -252,6 +267,18 @@ int main()
 					{
 						gameData.goldenCarrot.handle = spawn_collectible(gameData, CollectibleType::GoldenCarrot);
 						gameData.goldenCarrot.isSpawned = true;
+
+						// On notifie tout le monde
+						GoldenEventPacket packet;
+						packet.eventType = GoldenEventPacket::GoldenEventType::Spawn;
+
+						for (auto& player : gameData.players)
+						{
+							if (!player.peer)
+								continue;
+
+							enet_peer_send(player.peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+						}
 					}
 
 					// Add point to the brawler owning the golden carrot
@@ -328,6 +355,20 @@ int main()
 								// S'il avait la golden carrot on la remet en jeu
 								if (gameData.goldenCarrot.owningBrawlerId == (*it)->ownBrawlerNetworkId)
 								{
+									// On notifie tout le monde
+									GoldenEventPacket packet;
+									packet.eventType = GoldenEventPacket::GoldenEventType::Released;
+
+									packet.previousOwner = gameData.goldenCarrot.owningBrawlerId.value();
+
+									for (auto& player : gameData.players)
+									{
+										if (!player.peer)
+											continue;
+
+										enet_peer_send(player.peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+									}
+
 									gameData.goldenCarrot.handle.try_get<Sel::Transform>()->SetPosition(deathPosition);
 									gameData.goldenCarrot.owningBrawlerId.reset();
 								}
@@ -608,13 +649,16 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 
 				enet_peer_send(playingPlayer->peer, 0, build_packet(stealPacket, ENET_PACKET_FLAG_RELIABLE));
 			}
+
 			
 			if (!gameData.goldenCarrot.isSpawned || !gameData.goldenCarrot.owningBrawlerId.has_value())
 				break;
 
-
 			auto itStealer = gameData.networkToEntity.find(packet.brawlerId);
 			if (itStealer == gameData.networkToEntity.end())
+				break;
+
+			if (itStealer->first == gameData.goldenCarrot.owningBrawlerId.value()) // Le voler est deja le detenteur de la carotte
 				break;
 
 			Sel::Vector2f transformStealerPosition = itStealer->second.try_get<Sel::Transform>()->GetGlobalPosition();
@@ -633,6 +677,21 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 
 				if (distanceSqr <= 50.f * 50.f)
 				{
+					// On notifie tout le monde
+					GoldenEventPacket goldenEventPacket;
+					goldenEventPacket.eventType = GoldenEventPacket::GoldenEventType::Steal;
+
+					goldenEventPacket.previousOwner = gameData.goldenCarrot.owningBrawlerId.value();
+					goldenEventPacket.newOwner = packet.brawlerId;
+
+					for (auto& player : gameData.players)
+					{
+						if (!player.peer)
+							continue;
+
+						enet_peer_send(player.peer, 0, build_packet(goldenEventPacket, ENET_PACKET_FLAG_RELIABLE));
+					}
+
 					std::cout << "steal" << std::endl;
 					gameData.goldenCarrot.goldenCarrotClock.Restart();
 					gameData.goldenCarrot.owningBrawlerId = packet.brawlerId;
@@ -675,7 +734,7 @@ void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, Sel::VelocitySy
 	if (gameData.gamesState == GameState::GameRunning)
 	{
 		// Update the collectible system and modify leaderbaord if one collection occured (return true) 
-		if (collectibleSystem.Update())
+		if (collectibleSystem.Update(gameData))
 		{
 			std::cout << "update leaderboard" << std::endl;
 
@@ -749,8 +808,8 @@ void start_game(GameData& gameData)
 		gameData.leaderBoard.push_back(&player);
 	}
 
-	float goldenCarrotSpawnTime = static_cast<int>(gameData.playingPlayers.size() * 0.5f) * gameData.killInterval + 4.0f;
-	// float goldenCarrotSpawnTime = 5.f;
+	float goldenCarrotSpawnTime = static_cast<int>(gameData.playingPlayers.size() * 0.5f) * gameData.killInterval + 4.0f; // 4 sec après que la moitié des joueurs soient morts
+	//float goldenCarrotSpawnTime = 5.f;
 
 	gameData.goldenCarrot.goldenCarrotClock.Restart();
 	gameData.goldenCarrot.spawnTime = goldenCarrotSpawnTime;

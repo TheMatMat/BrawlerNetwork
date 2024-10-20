@@ -556,3 +556,65 @@ PlayerStealPacket PlayerStealPacket::Deserialize(const std::vector<std::uint8_t>
 
 	return packet;
 }
+
+void GoldenEventPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
+{
+	Serialize_u8(byteArray, static_cast<std::uint8_t>(eventType));
+
+	switch (eventType)
+	{
+		case GoldenEventType::Spawn:
+		{
+			break;
+		}
+		case GoldenEventType::Gathered:
+		{
+			Serialize_u32(byteArray, newOwner);
+			break;
+		}
+		case GoldenEventType::Released:
+		{
+			Serialize_u32(byteArray, previousOwner);
+			break;
+		}
+		case GoldenEventType::Steal:
+		{
+			Serialize_u32(byteArray, previousOwner); 
+			Serialize_u32(byteArray, newOwner);
+			break;
+		}
+	}
+}
+
+GoldenEventPacket GoldenEventPacket::Deserialize(const std::vector<std::uint8_t>& byteArray, std::size_t& offset)
+{
+	GoldenEventPacket packet;
+
+	packet.eventType = static_cast<GoldenEventType>(Deserialize_u8(byteArray, offset));
+
+	switch (packet.eventType)
+	{
+	case GoldenEventType::Spawn:
+	{
+		break;
+	}
+	case GoldenEventType::Gathered:
+	{
+		packet.newOwner = Deserialize_u32(byteArray, offset);
+		break;
+	}
+	case GoldenEventType::Released:
+	{
+		packet.previousOwner = Deserialize_u32(byteArray, offset);
+		break;
+	}
+	case GoldenEventType::Steal:
+	{
+		packet.previousOwner = Deserialize_u32(byteArray, offset);
+		packet.newOwner = Deserialize_u32(byteArray, offset);
+		break;
+	}
+	}
+
+	return packet;
+}

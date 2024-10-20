@@ -13,7 +13,7 @@ CollectibleSystem::CollectibleSystem(entt::registry& registry, GameData& gameDat
 
 }
 
-bool CollectibleSystem::Update()
+bool CollectibleSystem::Update(GameData& gameData)
 {
     bool collectionOccured = false;
 	auto collectibleView = m_registry.view<Sel::Transform, CollectibleFlag, NetworkedComponent>();
@@ -50,6 +50,17 @@ bool CollectibleSystem::Update()
                     m_gameData.goldenCarrot.pointPulseClock.Restart();
 
                     // Notify people
+                    GoldenEventPacket packet;
+                    packet.eventType = GoldenEventPacket::GoldenEventType::Gathered;
+                    packet.newOwner = brawlerNetwork.networkId;
+
+                    for (auto& player : gameData.players)
+                    {
+                        if (!player.peer)
+                            continue;
+
+                        enet_peer_send(player.peer, 0, build_packet(packet, ENET_PACKET_FLAG_RELIABLE));
+                    }
 
                     //Move it out the game space
                     collectibleTransform.SetPosition({ -20000.f, -20000.f });

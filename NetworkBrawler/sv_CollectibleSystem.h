@@ -9,7 +9,7 @@ class CollectibleSystem
 public:
 	CollectibleSystem(entt::registry& registry, GameData& gameData);
 
-	bool Update();
+	bool Update(GameData& gameData);
 
 private:
 	entt::registry& m_registry;
