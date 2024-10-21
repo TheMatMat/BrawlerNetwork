@@ -644,7 +644,7 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 		{
 			PlayerStealPacketRequest packet = PlayerStealPacketRequest::Deserialize(message, offset);
 
-			// On informe tout le monde qu'un brawler tente un vol (pour jouer l'animation chez tous les clients) sauf le voleur qui joue l'anim lui-même;
+			// On informe tout le monde qu'un brawler tente un vol (pour jouer l'animation chez tous les clients)
 			PlayerStealPacket stealPacket;
 			stealPacket.brawlerId = packet.brawlerId;
 
@@ -672,16 +672,12 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 			auto view = gameData.registry.view<Sel::Transform, BrawlerFlag, NetworkedComponent>(entt::exclude<DeadFlag>);
 			for (auto&& [entity, transform, flag, network] : view.each())
 			{
-				if (network.networkId != packet.brawlerId) // Ce brawler n'a pas la golden carotte. Pas nécessaire de checker si on en est assez proche pour le voler
+				if (network.networkId != gameData.goldenCarrot.owningBrawlerId.value()) // Ce brawler n'a pas la golden carotte. Pas nécessaire de checker si on en est assez proche pour le voler
 					continue; 
 
 				Sel::Vector2f transformPosition = gameData.registry.try_get<Sel::Transform>(entity)->GetGlobalPosition();
 
-				// Squared Distance
-				Sel::Vector2f delta = transformStealerPosition - transformPosition;
-				float distanceSqr = delta.x * delta.x + delta.y * delta.y;
-
-				if (distanceSqr <= 50.f * 50.f)
+				if ((transformStealerPosition - transformPosition).Magnitude() <= 100.f)
 				{
 					// On notifie tout le monde
 					GoldenEventPacket goldenEventPacket;
@@ -701,13 +697,14 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 					std::cout << "steal" << std::endl;
 					gameData.goldenCarrot.goldenCarrotClock.Restart();
 					gameData.goldenCarrot.owningBrawlerId = packet.brawlerId;
+
+					break; // Il n'y a qu'un seul porteur de golden carotte et on viens de le trouver. on sort de la boucle
 				}
 				else
 				{
 					std::cout << "no steal" << std::endl;
 				}
 
-				break; // Il n'y a qu'un seul porteur de golden carotte et on viens de le checker. on sort de la boucle
 			}
 
 			break;
