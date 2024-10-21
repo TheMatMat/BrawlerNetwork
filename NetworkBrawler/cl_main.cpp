@@ -663,10 +663,12 @@ int main()
 
 
 			Sel::Vector2f cameraPosition = cameraEntityUI.try_get<Sel::Transform>()->GetPosition() + Sel::Vector2f({ WINDOW_WIDTH * 0.5f, WINDOW_HEIGHT * 0.5f });
+			float distanceGoldenToCamera =(goldenBerryPosition - cameraPosition).Magnitude();
 			Sel::Vector2f direction = Sel::Vector2f::Normal(goldenBerryPosition - cameraPosition);
 
-			// Multiply by 100.f to get the final position
-			Sel::Vector2f finalPosition = direction * 100.f;
+			// Multiply by 150.f to get the final position but clamp if we are closer than that from the golden berry
+			float indicatorDistanceFromBrawler = distanceGoldenToCamera < 250.f ? distanceGoldenToCamera : 250.f;
+			Sel::Vector2f finalPosition = direction * indicatorDistanceFromBrawler;
 
 			indicatorTransform.SetPosition(cameraPosition + finalPosition);
 		}

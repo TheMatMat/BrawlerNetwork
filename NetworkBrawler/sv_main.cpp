@@ -718,8 +718,8 @@ void tick(GameData& gameData, Sel::PhysicsSystem& physicsSystem, Sel::VelocitySy
 	velocitySystem.Update(TickDelay);
 	networkSystem.Update();
 
-	auto view = gameData.registry.view<Sel::Transform>();
-	for (auto&& [entity, transform] : view.each())
+	auto view = gameData.registry.view<Sel::Transform, BrawlerFlag>(entt::exclude<DeadFlag>);
+	for (auto&& [entity, transform, flag] : view.each())
 	{
 		Sel::Vector2f position = transform.GetPosition();
 
@@ -808,8 +808,8 @@ void start_game(GameData& gameData)
 		gameData.leaderBoard.push_back(&player);
 	}
 
-	float goldenCarrotSpawnTime = static_cast<int>(gameData.playingPlayers.size() * 0.5f) * gameData.killInterval + 4.0f; // 4 sec après que la moitié des joueurs soient morts
-	//float goldenCarrotSpawnTime = 5.f;
+	//float goldenCarrotSpawnTime = static_cast<int>(gameData.playingPlayers.size() * 0.5f) * gameData.killInterval + 4.0f; // 4 sec après que la moitié des joueurs soient morts
+	float goldenCarrotSpawnTime = 5.f;
 
 	gameData.goldenCarrot.goldenCarrotClock.Restart();
 	gameData.goldenCarrot.spawnTime = goldenCarrotSpawnTime;
