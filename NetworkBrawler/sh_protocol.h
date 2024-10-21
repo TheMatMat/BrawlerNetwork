@@ -45,6 +45,7 @@ enum class Opcode : std::uint8_t
 struct BrawlerFlag
 {
 	std::uint32_t playerId;
+	std::uint8_t skinId = 0;
 };
 
 struct CollectibleFlag
@@ -165,6 +166,7 @@ struct CreateBrawlerPacket
 	
 	std::uint32_t playerId;
 	std::uint32_t brawlerId;
+	std::uint8_t skinId;
 	Sel::Vector2f position;
 	Sel::Vector2f linearVelocity;
 	float scale;

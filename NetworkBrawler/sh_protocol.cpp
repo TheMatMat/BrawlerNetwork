@@ -29,6 +29,7 @@ void CreateBrawlerPacket::Serialize(std::vector<std::uint8_t>& byteArray) const
 {
 	Serialize_u32(byteArray, playerId);
 	Serialize_u32(byteArray, brawlerId);
+	Serialize_u8(byteArray, skinId);
 	Serialize_f32(byteArray, position.x);
 	Serialize_f32(byteArray, position.y);
 	Serialize_f32(byteArray, linearVelocity.x);
@@ -43,6 +44,7 @@ CreateBrawlerPacket CreateBrawlerPacket::Deserialize(const std::vector<std::uint
 
 	packet.playerId = Deserialize_u32(byteArray, offset);
 	packet.brawlerId = Deserialize_u32(byteArray, offset);
+	packet.skinId = Deserialize_u8(byteArray, offset);
 	float posX = Deserialize_f32(byteArray, offset);
 	float posY = Deserialize_f32(byteArray, offset);
 	packet.position = Sel::Vector2(posX, posY);

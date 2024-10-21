@@ -46,6 +46,7 @@ struct PlayerData
 {
 	std::string name;
 	std::optional<std::uint32_t> ownBrawlerId;
+	std::optional<std::uint8_t> skinId;
 	bool isDead = true;
 };
 
@@ -991,6 +992,10 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 					gameData.spectatablePlayers.erase(playerId);
 					gameData.previousSpectateIndex = 50; // random number above player limits to trigger UI change
 				}
+				else
+				{
+					newPlayers[playerId].skinId = playerData.skinId;
+				}
 			}
 
 			gameData.players = std::move(newPlayers);
@@ -1010,6 +1015,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 			if (playerDataIt != gameData.players.end())
 			{
 				playerDataIt->second.ownBrawlerId = packet.brawlerId;
+				playerDataIt->second.skinId = packet.skinId;
 				brawlerName = playerDataIt->second.name;
 			}
 
@@ -1018,7 +1024,7 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 
 			
 
-			BrawlerClient brawler(*(gameData.registry), position, 0.f, scale, linearVelocity);
+			BrawlerClient brawler(*(gameData.registry), position, 0.f, scale, linearVelocity, packet.skinId);
 			auto brawlerNameEntity = CreateDisplayText(gameData, *(gameData.renderer), brawlerName, 26, Sel::Color::White, "assets/fonts/Hey Comic.otf", {0.5f, 0.5f}, false);
 
 			gameData.floatingEntitySystem->AddFloatingEntity(brawler.GetHandle().entity(), brawlerNameEntity.entity(), { 0.f, -40.f });
@@ -1268,8 +1274,9 @@ void handle_message(const std::vector<std::uint8_t>& message, GameData& gameData
 				bFlip = brawlerIt->second.try_get<Sel::Transform>()->GetScale().x > 0 ? false : true;
 			}
 
+			int skinId = it->second.skinId.has_value() ? it->second.skinId.value() : 0;
 			// Spawn temp entity for death anim
-			BrawlerClient::BuildTemp(*(gameData.registry), packet.deathPosition, bFlip);
+			BrawlerClient::BuildTemp(*(gameData.registry), packet.deathPosition, bFlip, skinId);
 
 			
 

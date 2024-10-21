@@ -34,6 +34,7 @@ void NetworkSystem::CreateAllEntities(ENetPeer* peer)
 			CreateBrawlerPacket createBrawler;
 			createBrawler.playerId = flag.playerId;
 			createBrawler.brawlerId = networked.networkId;
+			createBrawler.skinId = flag.skinId;
 			createBrawler.position = transform.GetPosition();
 			createBrawler.linearVelocity = velocity.linearVel;
 			createBrawler.scale = transform.GetScale().x;
@@ -74,6 +75,7 @@ void NetworkSystem::Update()
 				CreateBrawlerPacket createBrawler;
 				createBrawler.playerId = flag.playerId;
 				createBrawler.brawlerId = networked.networkId;
+				createBrawler.skinId = flag.skinId;
 				createBrawler.position = transform.GetPosition();
 				createBrawler.linearVelocity = velocity.linearVel;
 				createBrawler.scale = transform.GetScale().x;

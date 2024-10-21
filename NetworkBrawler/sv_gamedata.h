@@ -18,7 +18,8 @@ struct Player
 	std::string name; //< Nom du joueur
 	std::optional<Brawler> brawler;
 	std::optional<std::uint32_t> ownBrawlerNetworkId;
-	std::uint8_t playerScore = 0;
+	std::uint32_t playerScore = 0;
+	std::uint8_t skinIndex = 0;
 	bool isReady;
 	bool isDead;
 };

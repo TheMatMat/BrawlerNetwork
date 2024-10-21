@@ -525,12 +525,16 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 			// On cree le brawler coté serveur
 			Brawler brawler(gameData.registry, Sel::Vector2f(0.f, 0.f), 0.f, 1.f, Sel::Vector2f(10.f, 0.f));
 
+			//skin
+			srand(time(0));
+			player.skinIndex = (int)rand() % 3 + 1;
 
 			// on lui donne l'id de son player
 			auto flag = brawler.GetHandle().try_get<BrawlerFlag>();
 			if (flag)
 			{
 				flag->playerId = player.index;
+				flag->skinId = player.skinIndex;
 			}
 
 			auto network = brawler.GetHandle().try_get<NetworkedComponent>();
@@ -548,6 +552,8 @@ void handle_message(Player& player, const std::vector<std::uint8_t>& message, Ga
 
 			player.ownBrawlerNetworkId = network->networkId;
 			player.brawler = std::move(brawler);
+
+			
 
 			break;
 		}
