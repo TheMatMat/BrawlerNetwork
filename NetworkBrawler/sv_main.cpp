@@ -811,8 +811,8 @@ void start_game(GameData& gameData)
 		gameData.leaderBoard.push_back(&player);
 	}
 
-	//float goldenCarrotSpawnTime = static_cast<int>(gameData.playingPlayers.size() * 0.5f) * gameData.killInterval + 4.0f; // 4 sec après que la moitié des joueurs soient morts
-	float goldenCarrotSpawnTime = 5.f;
+	float goldenCarrotSpawnTime = static_cast<int>(gameData.playingPlayers.size() * 0.5f) * gameData.killInterval + 4.0f; // 4 sec après que la moitié des joueurs soient morts
+	//float goldenCarrotSpawnTime = 5.f;
 
 	gameData.goldenCarrot.goldenCarrotClock.Restart();
 	gameData.goldenCarrot.spawnTime = goldenCarrotSpawnTime;
